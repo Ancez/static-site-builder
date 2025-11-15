@@ -1,0 +1,64 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/static_site_builder"
+require "tty-prompt"
+
+def main
+  if ARGV.empty?
+    puts "Usage: ruby bin/generate <app-name>"
+    puts "   or: static-site-builder new <app-name>"
+    exit 1
+  end
+
+  app_name = ARGV[0]
+
+  if Dir.exist?(app_name)
+    puts "Error: Directory '#{app_name}' already exists"
+    exit 1
+  end
+
+  puts "Generating static site: #{app_name}"
+  puts "=" * 50
+
+  prompt = TTY::Prompt.new
+
+  template_engine = prompt.select(
+    "Template engine?",
+    StaticSiteBuilder::Generator::TEMPLATE_ENGINES.map(&:capitalize),
+    default: 1
+  ).downcase
+
+  js_bundler = prompt.select(
+    "JavaScript bundler?",
+    StaticSiteBuilder::Generator::JS_BUNDLERS.map(&:capitalize),
+    default: 1
+  ).downcase
+
+  css_framework = prompt.select(
+    "CSS framework?",
+    StaticSiteBuilder::Generator::CSS_FRAMEWORKS.map(&:capitalize),
+    default: 1
+  ).downcase
+
+  js_framework = prompt.select(
+    "JavaScript framework?",
+    StaticSiteBuilder::Generator::JS_FRAMEWORKS.map(&:capitalize),
+    default: 1
+  ).downcase
+
+  options = {
+    template_engine: template_engine,
+    js_bundler: js_bundler,
+    css_framework: css_framework,
+    js_framework: js_framework
+  }
+
+  generator = StaticSiteBuilder::Generator.new(app_name, options)
+  generator.generate
+rescue Interrupt
+  puts "\n\nGeneration cancelled."
+  exit 1
+end
+
+main if __FILE__ == $PROGRAM_NAME

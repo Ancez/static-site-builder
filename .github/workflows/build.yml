@@ -1,0 +1,49 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.2
+        bundler-cache: true
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        bundle install
+        npm install
+    
+    - name: Download Stimulus
+      run: |
+        mkdir -p vendor/javascript
+        curl -o vendor/javascript/stimulus.min.js https://unpkg.com/@hotwired/stimulus@3.2.0/dist/stimulus.js
+    
+    - name: Build CSS
+      run: npm run build:css
+    
+    - name: Build site
+      run: bundle exec rake build:html
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+

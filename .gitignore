@@ -1,0 +1,29 @@
+# Dependencies
+/.bundle/
+/vendor/bundle
+/node_modules/
+
+# Build artifacts
+*.gem
+*.gemspec.bak
+/dist/
+/tmp/
+/coverage/
+
+# Test artifacts
+/.rspec_status
+/spec/fixtures/example-site-*/
+
+# IDE
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
