@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2025-11-14
+## [0.0.1] - 2025-11-21
 
 ### Added
 - Initial release of static-site-builder gem
@@ -19,22 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Layout support with nested layouts
 - Importmap JSON generation
 - Asset copying (JavaScript, CSS, vendor files, static files)
-- Comprehensive test suite with 397 examples
+- Comprehensive test suite
 - YARD documentation
 - CI/CD setup (GitHub Actions)
 
 ### Changed
-- Renamed from static-site-generator to static-site-builder
-- Refactored to use gem-based architecture
+- Vendor JavaScript files are automatically copied directly from `node_modules` to `dist/assets/javascripts/` during build
+- Removed requirement for `vendor/javascript/` folder - vendor files are copied automatically based on importmap configuration
+- Generator no longer creates vendor files during project generation
 
 ### Fixed
-- Fixed indentation issues throughout codebase
-- Fixed Rakefile template interpolation issues
-- Fixed asset copying to handle empty directories
-- Fixed test helper loading
+- Added warning messages when vendor files cannot be found in `node_modules`
+- Updated base64 dependency comments to clarify requirement for Ruby 3.4+
 
-### Security
-- No known security issues
-
-[0.1.0]: https://github.com/yourusername/html-importmap-ruby/releases/tag/v0.1.0
+[0.0.1]: https://github.com/Ancez/static-site-builder/releases/tag/v0.0.1
 

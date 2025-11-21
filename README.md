@@ -16,8 +16,8 @@ Generate static HTML pages with JavaScript files that work. Choose your own stac
 ```bash
 gem install static-site-builder
 # or
-git clone https://github.com/yourusername/html-importmap-ruby
-cd html-importmap-ruby
+git clone https://github.com/Ancez/static-site-builder
+cd static-site-builder
 bundle install
 ```
 
@@ -31,8 +31,8 @@ static-site-builder new my-site
 
 ### Option 2: Use directly from repo
 ```bash
-git clone https://github.com/yourusername/html-importmap-ruby
-cd html-importmap-ruby
+git clone https://github.com/Ancez/static-site-builder
+cd static-site-builder
 bundle install
 ruby bin/generate my-site
 ```
@@ -429,8 +429,8 @@ For any static hosting provider (AWS S3, Azure Static Web Apps, etc.):
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/html-importmap-ruby
-cd html-importmap-ruby
+git clone https://github.com/Ancez/static-site-builder
+cd static-site-builder
 
 # Install dependencies
 bundle install
