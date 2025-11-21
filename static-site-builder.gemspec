@@ -13,7 +13,6 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/Ancez/static-site-builder"
   spec.license       = "MIT"
 
-  spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/Ancez/static-site-builder"
   spec.metadata["changelog_uri"] = "https://github.com/Ancez/static-site-builder/blob/master/CHANGELOG.md"
 
@@ -24,6 +23,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 3.0"
 
+  spec.add_dependency "base64", "~> 0.1"  # Required for Ruby 3.4+ (removed from default gems)
   spec.add_dependency "rake", "~> 13.0"
   spec.add_dependency "tty-prompt", "~> 0.23"
   spec.add_dependency "websocket", "~> 1.2"

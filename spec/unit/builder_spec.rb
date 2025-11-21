@@ -92,16 +92,23 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(File.read(dist_css)).to include("body { margin: 0; }")
     end
 
-    it "copies vendor JavaScript files" do
-      vendor_dir = site_root.join("vendor/javascript")
-      FileUtils.mkdir_p(vendor_dir)
-      File.write(vendor_dir.join("library.js"), "library code")
+    it "copies vendor JavaScript files from node_modules for importmap" do
+      # Create importmap config with a vendor package
+      create_importmap_config(site_root.to_s, <<~RUBY)
+        pin "@test/package", to: "test.js", preload: true
+      RUBY
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      # Create node_modules structure
+      node_modules = site_root.join("node_modules/@test/package")
+      FileUtils.mkdir_p(node_modules.join("dist"))
+      File.write(node_modules.join("dist/test.js"), "test package code")
+
+      builder = described_class.new(root: site_root.to_s, js_bundler: "importmap")
       builder.build
 
-      dist_vendor = site_root.join("dist/assets/javascripts/vendor/library.js")
+      dist_vendor = site_root.join("dist/assets/javascripts/test.js")
       expect(dist_vendor).to exist
+      expect(File.read(dist_vendor)).to eq("test package code")
     end
 
     it "copies static files from public directory" do

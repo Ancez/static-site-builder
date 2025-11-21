@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "socket"
-require "base64"
+require "base64"  # Required for Ruby 3.4+ (removed from default gems)
 require "digest/sha1"
 require "pathname"
 

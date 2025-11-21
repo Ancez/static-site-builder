@@ -197,64 +197,12 @@ module StaticSiteBuilder
     end
 
     def stimulus_pin
-      create_stimulus_vendor_files
       <<~RUBY
         pin "@hotwired/stimulus", to: "stimulus.min.js", preload: true
         pin_all_from "app/javascript/controllers", under: "controllers"
       RUBY
     end
 
-    def create_stimulus_vendor_files
-      vendor_dir = @app_path.join("vendor", "javascript")
-      FileUtils.mkdir_p(vendor_dir)
-
-      # Always try to install and copy from package manager - no hardcoded placeholders
-      stimulus_file = vendor_dir.join("stimulus.min.js")
-
-      pm = detect_package_manager
-      unless install_and_copy_npm_package("@hotwired/stimulus", "dist/stimulus.js", stimulus_file, "Stimulus")
-        install_cmd = pm ? "#{pm} add @hotwired/stimulus" : "npm install @hotwired/stimulus"
-        puts "⚠️  Warning: Could not install @hotwired/stimulus"
-        puts "   Run: #{install_cmd}"
-        puts "   Then copy node_modules/@hotwired/stimulus/dist/stimulus.js to vendor/javascript/stimulus.min.js"
-      end
-    end
-
-    # Helper to install npm package and copy file
-    # Supports npm, yarn, pnpm, bun
-    def install_and_copy_npm_package(package_name, source_path, dest_file, display_name = nil)
-      pm = detect_package_manager
-      return false unless pm
-
-      display_name ||= package_name
-      puts "Installing #{display_name} via #{pm}..."
-
-      Dir.chdir(@app_path) do
-        install_cmd = case pm
-        when "yarn"
-          "yarn add #{package_name} --silent"
-        when "pnpm"
-          "pnpm add #{package_name} --silent"
-        when "bun"
-          "bun add #{package_name} --silent"
-        else
-          "npm install #{package_name} --silent"
-        end
-
-        return false unless system("#{install_cmd} > /dev/null 2>&1")
-
-        source_file = @app_path.join("node_modules", *package_name.split("/"), *source_path.split("/"))
-        if source_file.exist?
-          FileUtils.cp(source_file, dest_file)
-          puts "✓ Installed #{display_name}"
-          return true
-        end
-      end
-
-      false
-    rescue => e
-      false
-    end
 
     # Detect which package manager is available
     def detect_package_manager
@@ -764,7 +712,7 @@ module StaticSiteBuilder
             task :clean do
               dist_dir = Pathname.new(Dir.pwd).join("dist")
               FileUtils.rm_rf(dist_dir) if dist_dir.exist?
-              puts "Cleaned #{dist_dir}"
+              puts "Cleaned \#{dist_dir}"
             end
           end
 
@@ -800,7 +748,7 @@ module StaticSiteBuilder
             task :clean do
               dist_dir = Pathname.new(Dir.pwd).join("dist")
               FileUtils.rm_rf(dist_dir) if dist_dir.exist?
-              puts "Cleaned #{dist_dir}"
+              puts "Cleaned \#{dist_dir}"
             end
           end
 

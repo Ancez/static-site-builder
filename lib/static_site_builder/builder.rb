@@ -111,18 +111,9 @@ module StaticSiteBuilder
         end
       end
 
-      # Validate and copy vendor JavaScript files
+      # Copy vendor JavaScript files directly from node_modules to dist (for importmap)
       if @js_bundler == "importmap"
-        validate_vendor_files
-      end
-
-      vendor_js = @root.join("vendor", "javascript")
-      if vendor_js.exist? && vendor_js.directory?
-        dist_js = dist_dir.join("assets", "javascripts")
-        FileUtils.mkdir_p(dist_js)
-        Dir.glob(vendor_js.join("*.js")).each do |item|
-          FileUtils.cp(item, dist_js.join(File.basename(item)), preserve: true)
-        end
+        copy_vendor_files_from_node_modules(dist_dir)
       end
 
       # Copy CSS
@@ -136,40 +127,66 @@ module StaticSiteBuilder
       end
     end
 
-    def validate_vendor_files
+    def copy_vendor_files_from_node_modules(dist_dir)
       return unless @importmap_config_path && @importmap_config_path.exist?
 
       config_content = File.read(@importmap_config_path.to_s)
-      vendor_js = @root.join("vendor", "javascript")
-      missing_files = []
+      dist_js = dist_dir.join("assets", "javascripts")
+      FileUtils.mkdir_p(dist_js)
 
       # Extract vendor file references from importmap config
       # Look for patterns like: pin "@hotwired/stimulus", to: "stimulus.min.js"
+      # Only process pins that have 'to:' specified (vendor files), not local app files
       config_content.scan(/pin\s+["']([^"']+)["'],\s*to:\s*["']([^"']+)["']/) do |package_name, file_name|
-        vendor_file = vendor_js.join(file_name)
-        unless vendor_file.exist?
-          missing_files << { package: package_name, file: file_name, path: vendor_file }
+        # Skip if this is a local app file
+        next if file_name.start_with?("app/") || file_name.start_with?("./app/")
+
+        # Only try to copy npm packages (scoped packages like @hotwired/stimulus or known packages)
+        # Skip simple names like "application" that are local files
+        next unless package_name.include?("/") || package_name.start_with?("@")
+
+        dest_file = dist_js.join(file_name)
+        next if dest_file.exist?
+
+        # Try to copy directly from node_modules to dist
+        if copy_vendor_file_from_node_modules(package_name, file_name, dest_file)
+          puts "  ✓ Copied #{file_name} from #{package_name}"
+        else
+          puts "  ⚠️  Warning: Could not find #{file_name} for #{package_name} in node_modules"
+          puts "     Ensure 'npm install' has been run and the package is installed."
+        end
+      end
+    end
+
+    def copy_vendor_file_from_node_modules(package_name, file_name, dest_file)
+      node_modules = @root.join("node_modules")
+      return false unless node_modules.exist?
+
+      package_dir = node_modules.join(*package_name.split("/"))
+      return false unless package_dir.exist?
+
+      # Try common source paths for the package
+      # Extract base name from file_name (e.g., "stimulus.min.js" -> "stimulus")
+      base_name = file_name.gsub(/\.(min\.)?js$/, "")
+      source_paths = [
+        "dist/#{base_name}.js",
+        "dist/#{base_name}.min.js",
+        "dist/index.js",
+        "#{base_name}.js",
+        "index.js",
+        "dist/#{file_name}",
+        file_name
+      ]
+
+      source_paths.each do |source_path|
+        source_file = package_dir.join(*source_path.split("/"))
+        if source_file.exist? && source_file.file?
+          FileUtils.cp(source_file, dest_file)
+          return true
         end
       end
 
-      unless missing_files.empty?
-        puts "\n❌ Error: Missing required vendor JavaScript files:"
-        missing_files.each do |missing|
-          puts "   - #{missing[:file]} (required by #{missing[:package]})"
-          puts "     Expected at: #{missing[:path]}"
-        end
-        puts "\nTo fix this:"
-        puts "   1. Run 'npm install' to install dependencies"
-        puts "   2. Copy the required files from node_modules to vendor/javascript/"
-        puts "   Example:"
-        missing_files.each do |missing|
-          if missing[:package].include?("@hotwired/stimulus")
-            puts "      cp node_modules/@hotwired/stimulus/dist/stimulus.js vendor/javascript/#{missing[:file]}"
-          end
-        end
-        puts "\nNote: Vendor files should be committed to your repository."
-        raise "Missing required vendor JavaScript files"
-      end
+      false
     end
 
     def generate_importmap(dist_dir)

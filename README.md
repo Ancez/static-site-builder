@@ -105,6 +105,115 @@ my-site/
 - **Alpine.js** - Minimal framework for HTML
 - **Vanilla JS** - No framework
 
+## Building Powerful Websites
+
+### Using ERB Templates
+
+Create pages in `app/views/pages/` with frontmatter:
+
+```erb
+---
+title: My Page
+description: A great page
+---
+
+<h1><%= @title %></h1>
+<p><%= @description %></p>
+```
+
+Use layouts in `app/views/layouts/application.html.erb`:
+
+```erb
+<!DOCTYPE html>
+<html>
+<head>
+  <title><%= @title || "My Site" %></title>
+</head>
+<body>
+  <%= yield %>
+</body>
+</html>
+```
+
+### Using Phlex Components
+
+Create reusable components in `app/views/components/`:
+
+```ruby
+class Button < Phlex::HTML
+  def initialize(text:, href:, variant: "primary")
+    @text = text
+    @href = href
+    @variant = variant
+  end
+
+  def template
+    a(href: @href, class: "btn btn-#{@variant}") { @text }
+  end
+end
+```
+
+Use in pages:
+
+```ruby
+class HomePage < Phlex::HTML
+  def template
+    div do
+      h1 { "Welcome" }
+      render Button.new(text: "Get Started", href: "/about")
+    end
+  end
+end
+```
+
+### JavaScript with Importmap
+
+No bundling needed - use ES modules directly:
+
+```javascript
+// app/javascript/application.js
+import { Application } from "@hotwired/stimulus"
+import HelloController from "./controllers/hello_controller"
+
+window.Stimulus = Application.start()
+Stimulus.register("hello", HelloController)
+```
+
+### JavaScript with Bundlers
+
+Use ESBuild, Webpack, or Vite for modern tooling:
+
+```javascript
+// app/javascript/index.js
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+
+function App() {
+  return <h1>Hello from React!</h1>
+}
+
+const root = createRoot(document.getElementById('app'))
+root.render(<App />)
+```
+
+### CSS with TailwindCSS
+
+Use utility classes directly in templates:
+
+```erb
+<div class="container mx-auto px-4">
+  <h1 class="text-4xl font-bold text-gray-900">Hello World</h1>
+</div>
+```
+
+### CSS with shadcn/ui
+
+Install components and use them in your templates:
+
+```bash
+npx shadcn-ui@latest add button
+```
+
 ## Examples
 
 ### ERB + Importmap + Stimulus + TailwindCSS
@@ -123,24 +232,19 @@ static-site-builder new my-site
 
 ### For Importmap Projects
 
-When using **Importmap** as your JavaScript bundler, vendor JavaScript files must be present in `vendor/javascript/` before building:
+When using **Importmap** as your JavaScript bundler:
 
-1. **Install npm dependencies** (if not already done):
+1. **Install npm dependencies**:
    ```bash
    npm install
    ```
 
-2. **Copy vendor files** from `node_modules` to `vendor/javascript/`:
+2. **Build your site** - vendor files are automatically copied from `node_modules` to `dist/assets/javascripts/` during the build:
    ```bash
-   # Example for Stimulus
-   cp node_modules/@hotwired/stimulus/dist/stimulus.js vendor/javascript/stimulus.min.js
+   rake build:all
    ```
 
-3. **Commit vendor files** to your repository (they should be version controlled)
-
-The generator will attempt to copy vendor files automatically during project generation. If vendor files are missing during build, the build will fail with clear error messages indicating which files are required.
-
-**Note**: Vendor files are required at build time. The build process will not automatically copy from `node_modules` - you must ensure vendor files exist before building.
+The build process automatically copies required vendor JavaScript files directly from `node_modules` to `dist/assets/javascripts/` based on your importmap configuration. No intermediate `vendor/javascript/` folder is needed.
 
 ## Development
 
@@ -152,10 +256,6 @@ After generating a site, you can run it locally with auto-rebuild and live reloa
 cd my-site
 bundle install
 npm install  # Required for importmap projects and JS frameworks
-
-# Ensure vendor files exist (for importmap projects)
-# The generator should have created these, but if missing:
-# cp node_modules/@hotwired/stimulus/dist/stimulus.js vendor/javascript/stimulus.min.js
 
 # Start development server (auto-rebuilds on file changes)
 rake dev:server
@@ -198,8 +298,8 @@ The `dist/` directory contains your complete static site and can be deployed to 
    - **Root directory**: (leave empty or set to repository root)
 
 3. **Environment variables** (if needed):
-   - `RUBY_VERSION`: Set to your Ruby version (e.g., `3.2`)
-   - `NODE_VERSION`: Set to your Node.js version (e.g., `18`)
+   - `RUBY_VERSION`: Set to your Ruby version (e.g., `3.4`)
+   - `NODE_VERSION`: Set to your Node.js version (e.g., `24`)
 
 4. **Deploy**: Cloudflare Pages will automatically build and deploy on every push to your main branch
 
@@ -244,8 +344,8 @@ The `dist/` directory contains your complete static site and can be deployed to 
      publish = "dist"
    
    [build.environment]
-     RUBY_VERSION = "3.2"
-     NODE_VERSION = "18"
+     RUBY_VERSION = "3.4"
+     NODE_VERSION = "24"
    ```
 
 2. **Deploy**:
@@ -269,18 +369,18 @@ The `dist/` directory contains your complete static site and can be deployed to 
      deploy:
        runs-on: ubuntu-latest
        steps:
-         - uses: actions/checkout@v3
+         - uses: actions/checkout@v4
          
          - name: Set up Ruby
            uses: ruby/setup-ruby@v1
            with:
-             ruby-version: 3.2
+             ruby-version: 3.4
              bundler-cache: true
          
          - name: Set up Node.js
-           uses: actions/setup-node@v3
+           uses: actions/setup-node@v4
            with:
-             node-version: '18'
+             node-version: '24'
              cache: 'npm'
          
          - name: Install dependencies
@@ -288,12 +388,12 @@ The `dist/` directory contains your complete static site and can be deployed to 
              bundle install
              npm install
          
-         - name: Build site
-           run: bundle exec rake build:all
-           # Note: Vendor files in vendor/javascript/ must be committed to the repo
+        - name: Build site
+          run: bundle exec rake build:all
+          # Note: Vendor files will be automatically copied from node_modules during build
          
          - name: Deploy to GitHub Pages
-           uses: peaceiris/actions-gh-pages@v3
+           uses: peaceiris/actions-gh-pages@v4
            with:
              github_token: ${{ secrets.GITHUB_TOKEN }}
              publish_dir: ./dist
@@ -320,7 +420,7 @@ For any static hosting provider (AWS S3, Azure Static Web Apps, etc.):
 
 ### CI/CD Considerations
 
-- **Vendor files**: `vendor/javascript/` files **must be committed** to your repository (they're required at build time and the build will fail if missing)
+- **Vendor files**: Vendor files are automatically copied from `node_modules` to `dist/` during build - no vendor folder needed
 - **Dependencies**: Both Ruby (`Gemfile`) and Node.js (`package.json`) dependencies are needed for the build
 - **Build order**: Install dependencies → Build assets → Build HTML
 - **Ruby/Node versions**: Specify versions in your CI/CD configuration to ensure consistent builds
