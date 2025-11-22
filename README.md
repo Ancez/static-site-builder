@@ -4,11 +4,21 @@
 
 A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your templates to static HTML and deploy anywhere.
 
-📖 **Learn more about the project**: [Why and What - Static Site Builder](https://lukaszczapiewski.com/projects/static-site-builder) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
+📖 **Learn more**: [Project Overview](https://lukaszczapiewski.com/projects/static-site-builder) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
 
 ## Why This Exists
 
 Uses **ActionView** to render ERB templates - get the full flexibility of Rails views (partials, layouts, helpers) compiled to static HTML. Uses standard Ruby gems and familiar patterns.
+
+## Why Choose This Over Other Approaches
+
+**Better SEO & Search Rankings**: Unlike Single Page Applications (SPAs) that rely on client-side JS rendering, static HTML is immediately crawlable by search engines. Your content is fully indexed from the first request, leading to better search rankings and significantly faster page loads.
+
+**Simplicity Over Complexity**: No need for complex JavaScript frameworks, hydration, or server-side rendering setups. Write Ruby templates that compile to clean, static HTML. Add JavaScript only where you need interactivity, not as a requirement for rendering.
+
+**Developer Experience**: Work with familiar Rails patterns (ERB, ActionView, partials) without the overhead of a full Rails application. Build fast, deploy anywhere, and maintain easily.
+
+**Version Control & Mobile Editing**: Your entire site is code in a Git repository. Track changes, collaborate, and edit from anywhere - even your phone with tools like Cursor Agents. No database migrations or CMS interfaces needed. Lightning fast.
 
 ## Main Objective
 
