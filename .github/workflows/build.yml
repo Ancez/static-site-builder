@@ -19,19 +19,8 @@ jobs:
         ruby-version: 3.2
         bundler-cache: true
     
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-    
     - name: Install dependencies
-      run: |
-        bundle install
-        npm install
-    
-    - name: Build CSS
-      run: npm run build:css
+      run: bundle install
     
     - name: Build site
       run: bundle exec rake build:html
