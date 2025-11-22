@@ -35,6 +35,20 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(site_root.join("dist/assets/stylesheets/custom.css")).to exist
     end
 
+    it "skips copying CSS files when Tailwind config exists" do
+      css_dir = site_root.join("app/assets/stylesheets")
+      File.write(css_dir.join("application.css"), "@tailwind base;")
+      
+      # Create Tailwind config to trigger skip
+      File.write(site_root.join("tailwind.config.js"), "module.exports = {};")
+
+      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder.build
+
+      # CSS should not be copied when Tailwind config exists
+      expect(site_root.join("dist/assets/stylesheets/application.css")).not_to exist
+    end
+
     it "handles missing asset directories gracefully" do
       # Remove javascript directory
       FileUtils.rm_rf(site_root.join("app/javascript"))

@@ -23,6 +23,7 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 3.0"
 
+  spec.add_dependency "actionview", "~> 8.0"
   spec.add_dependency "base64", "~> 0.1"  # Required for Ruby 3.4+ (removed from default gems)
   spec.add_dependency "rake", "~> 13.0"
   spec.add_dependency "tty-prompt", "~> 0.23"

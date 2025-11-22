@@ -70,6 +70,7 @@ module StaticSiteBuilder
       create_build_files
       create_example_pages
       create_readme
+      create_gitignore
 
       puts "\n✓ Site generated successfully!"
       puts "\nNext steps:"
@@ -580,6 +581,18 @@ module StaticSiteBuilder
           @tailwind base;
           @tailwind components;
           @tailwind utilities;
+
+          @layer base {
+            html {
+              scroll-behavior: smooth;
+            }
+          }
+
+          @layer utilities {
+            section[id] {
+              scroll-margin-top: 5rem;
+            }
+          }
         CSS
       when "shadcn"
         write_file("app/assets/stylesheets/application.css", <<~CSS)
@@ -614,6 +627,7 @@ module StaticSiteBuilder
         require "webrick"
         require "fileutils"
         require "static_site_builder/websocket_server"
+        require "json"
 
         port = ENV["PORT"] || 3000
         ws_port = ENV["WS_PORT"] || 3001
@@ -629,13 +643,33 @@ module StaticSiteBuilder
         ENV["WS_PORT"] = ws_port.to_s
         Rake::Task["build:all"].invoke
 
+        # Check if we need to run Tailwind CSS watch (after initial build)
+        tailwind_pid = nil
+        package_json_path = Pathname.new(Dir.pwd).join("package.json")
+        if package_json_path.exist?
+          package_json = JSON.parse(File.read(package_json_path))
+          if package_json.dig("scripts", "watch:css")
+            puts "🎨 Starting Tailwind CSS watch mode..."
+            tailwind_pid = spawn("npm", "run", "watch:css", :err => File::NULL, :out => File::NULL)
+            # Touch the source file to trigger Tailwind watch to process CSS immediately
+            css_source = Pathname.new(Dir.pwd).join("app", "assets", "stylesheets", "application.css")
+            if css_source.exist?
+              FileUtils.touch(css_source)
+            end
+            # Give Tailwind a moment to process CSS
+            sleep 1.5
+          end
+        end
+
         puts "\n🚀 Starting development server at http://localhost:#{port}"
         puts "📡 WebSocket server at ws://localhost:#{ws_port}"
         puts "📝 Watching for changes... (Ctrl+C to stop)"
         puts "🔄 Live reload enabled - pages will auto-refresh on changes\n"
 
-        # Simple file watcher - just rebuild when files change (no relaunch needed)
-        watcher_code = %q{watched = ['app', 'config']; exts = ['.erb', '.rb', '.js', '.css']; mtimes = {}; loop do; changed = false; watched.each do |dir|; Dir.glob(File.join(dir, '**', '*')).each do |f|; next unless File.file?(f) && exts.any? { |e| f.end_with?(e) }; mtime = File.mtime(f); if mtimes[f] != mtime; mtimes[f] = mtime; changed = true; end; end; end; system('rake build:all > /dev/null 2>&1') if changed; sleep 0.5; end}
+        # Simple file watcher - rebuild HTML when non-CSS files change
+        # CSS changes are handled by Tailwind watch, so we skip rebuild for CSS files
+        # When HTML rebuilds, it cleans dist, so we need to rebuild CSS immediately after
+        watcher_code = %q{watched = ['app', 'config']; exts = ['.erb', '.rb', '.js']; mtimes = {}; loop do; changed = false; watched.each do |dir|; Dir.glob(File.join(dir, '**', '*')).each do |f|; next unless File.file?(f) && exts.any? { |e| f.end_with?(e) }; next if f.end_with?('.css'); mtime = File.mtime(f); if mtimes[f] != mtime; mtimes[f] = mtime; changed = true; end; end; end; if changed; system('rake build:html > /dev/null 2>&1 && rake build:css > /dev/null 2>&1'); end; sleep 0.5; end}
         watcher_pid = spawn("ruby", "-e", watcher_code, :err => File::NULL)
 
         # Start web server
@@ -648,6 +682,7 @@ module StaticSiteBuilder
         trap("INT") do
           puts "\n\nShutting down..."
           Process.kill("TERM", watcher_pid) if watcher_pid
+          Process.kill("TERM", tailwind_pid) if tailwind_pid
           ws_server.stop
           server.shutdown
         end
@@ -693,19 +728,42 @@ module StaticSiteBuilder
           require "pathname"
 
           namespace :build do
-            desc "Build everything (assets + HTML)"
-            task :all => [:assets, :html] do
+            desc "Build everything (HTML + CSS)"
+            task :all => [:html, :css] do
               puts "\\n✓ Build complete!"
             end
 
-            desc "Build JavaScript/CSS assets"
+            desc "Build JavaScript assets"
             task :assets do
-              sh "npm run build" if File.exist?("package.json")
+              if File.exist?("package.json")
+                package_json = JSON.parse(File.read("package.json"))
+                build_script = package_json.dig("scripts", "build")
+                # Only run if build script exists and doesn't include CSS (CSS handled separately)
+                if build_script && !build_script.include?("build:css")
+                  sh "npm run build"
+                end
+              end
             end
 
             desc "Compile all pages to static HTML"
-            task :html do
+            task :html => [:assets] do
               load "lib/site_builder.rb"
+            end
+
+            desc "Build CSS (runs after HTML so dist directory exists)"
+            task :css do
+              if File.exist?("package.json")
+                package_json = JSON.parse(File.read("package.json"))
+                if package_json.dig("scripts", "build:css")
+                  sh "npm run build:css"
+                end
+              elsif File.exist?("tailwind.config.js")
+                # Build CSS even if no package.json (standalone Tailwind)
+                if system("which tailwindcss > /dev/null 2>&1")
+                  FileUtils.mkdir_p("dist/assets/stylesheets")
+                  sh "tailwindcss -i ./app/assets/stylesheets/application.css -o ./dist/assets/stylesheets/application.css --minify"
+                end
+              end
             end
 
             desc "Clean dist directory"
@@ -713,6 +771,12 @@ module StaticSiteBuilder
               dist_dir = Pathname.new(Dir.pwd).join("dist")
               FileUtils.rm_rf(dist_dir) if dist_dir.exist?
               puts "Cleaned \#{dist_dir}"
+            end
+
+            desc "Build for production/release (cleans dist directory first)"
+            task :production do
+              ENV["PRODUCTION"] = "true"
+              Rake::Task["build:all"].invoke
             end
           end
 
@@ -749,6 +813,12 @@ module StaticSiteBuilder
               dist_dir = Pathname.new(Dir.pwd).join("dist")
               FileUtils.rm_rf(dist_dir) if dist_dir.exist?
               puts "Cleaned \#{dist_dir}"
+            end
+
+            desc "Build for production/release (cleans dist directory first)"
+            task :production do
+              ENV["PRODUCTION"] = "true"
+              Rake::Task["build:all"].invoke
             end
           end
 
@@ -887,7 +957,7 @@ module StaticSiteBuilder
     end
 
     def build_script
-      case @options[:js_bundler]
+      js_build = case @options[:js_bundler]
       when "esbuild"
         "node esbuild.config.js"
       when "webpack"
@@ -895,7 +965,20 @@ module StaticSiteBuilder
       when "vite"
         "vite build"
       else
-        "echo 'No JS bundling needed'"
+        nil
+      end
+
+      css_build = if needs_css_build?
+        "npm run build:css"
+      else
+        nil
+      end
+
+      builds = [js_build, css_build].compact
+      if builds.empty?
+        "echo 'No bundling needed'"
+      else
+        builds.join(" && ")
       end
     end
 
@@ -922,6 +1005,41 @@ module StaticSiteBuilder
 
     def needs_css_build?
       @options[:css_framework] == "tailwindcss" || @options[:css_framework] == "shadcn"
+    end
+
+    def create_gitignore
+      content = <<~GITIGNORE
+        # Dependencies
+        /.bundle/
+        /vendor/bundle
+        /node_modules/
+
+        # Build artifacts
+        *.gem
+        *.gemspec.bak
+        /dist/
+        /tmp/
+        /coverage/
+
+        # Test artifacts
+        /.rspec_status
+
+        # IDE
+        /.idea/
+        /.vscode/
+        *.swp
+        *.swo
+        *~
+
+        # OS
+        .DS_Store
+        Thumbs.db
+
+        # Logs
+        *.log
+      GITIGNORE
+
+      write_file(".gitignore", content)
     end
 
     def write_file(path, content)

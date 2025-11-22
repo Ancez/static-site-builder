@@ -127,6 +127,23 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(postcss_config).to exist
     end
 
+    it "creates CSS file with Tailwind directives and custom layers for tailwindcss" do
+      generator = described_class.new(app_path.to_s, css_framework: "tailwindcss")
+      generator.generate
+
+      css_file = app_path.join("app/assets/stylesheets/application.css")
+      expect(css_file).to exist
+
+      content = File.read(css_file)
+      expect(content).to include("@tailwind base")
+      expect(content).to include("@tailwind components")
+      expect(content).to include("@tailwind utilities")
+      expect(content).to include("@layer base")
+      expect(content).to include("scroll-behavior: smooth")
+      expect(content).to include("@layer utilities")
+      expect(content).to include("scroll-margin-top: 5rem")
+    end
+
     it "creates esbuild config when using esbuild" do
       generator = described_class.new(app_path.to_s, js_bundler: "esbuild")
       generator.generate

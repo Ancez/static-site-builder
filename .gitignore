@@ -8,6 +8,7 @@
 *.gemspec.bak
 /dist/
 /tmp/
+/tmp_verify/
 /coverage/
 
 # Test artifacts
