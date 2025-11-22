@@ -3,7 +3,7 @@
 source "https://rubygems.org"
 
 # Generator dependencies only
-gem "actionview", ">= 8.0"
+gem "actionview", "~> 7.1"
 gem "rake", "~> 13.0"
 gem "base64", "~> 0.1"  # Required for Ruby 3.4+ (removed from default gems)
 
