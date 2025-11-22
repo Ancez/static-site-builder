@@ -1,5 +1,7 @@
 # Static Site Builder
 
+> **Note**: This project is currently under active development. Whilst the web setup with TailwindCSS and image handling is fully functional and production-ready, other features may be incomplete or subject to change. Please proceed with caution and report any issues you encounter.
+
 A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your templates to static HTML and deploy anywhere.
 
 ## Main Objective
