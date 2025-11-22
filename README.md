@@ -4,7 +4,7 @@
 
 A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your templates to static HTML and deploy anywhere.
 
-📖 **Learn more**: [Project Overview](https://lukaszczapiewski.com/projects/static-site-builder) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
+📖 **Learn more**: [Demo](https://lukaszczapiewski.com) | [Project Overview](https://lukaszczapiewski.com) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
 
 ## Why This Exists
 
@@ -274,6 +274,14 @@ static-site-builder new my-site
 static-site-builder new my-site
 # Choose: Phlex, ESBuild, shadcn/ui, React
 ```
+
+## Notable Projects
+
+Sites built with Static Site Builder:
+
+- **[lukaszczapiewski.com](https://lukaszczapiewski.com)** - Personal portfolio and blog
+
+**Your website?** Built with Static Site Builder? [Submit a PR](https://github.com/Ancez/static-site-builder) to add it here!
 
 ## Requirements
 
