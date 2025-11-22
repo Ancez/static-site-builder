@@ -86,6 +86,10 @@ GEM
     simplecov_json_formatter (0.1.4)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
+    view_component (4.1.1)
+      actionview (>= 7.1.0, < 8.2)
+      activesupport (>= 7.1.0, < 8.2)
+      concurrent-ruby (~> 1)
 
 PLATFORMS
   aarch64-linux-gnu
@@ -103,6 +107,7 @@ DEPENDENCIES
   rake (~> 13.0)
   rspec (~> 3.12)
   simplecov (~> 0.22)
+  view_component (~> 4.0)
 
 BUNDLED WITH
    2.6.9

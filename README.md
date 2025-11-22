@@ -4,6 +4,12 @@
 
 A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your templates to static HTML and deploy anywhere.
 
+📖 **Learn more about the project**: [Why and What - Static Site Builder](https://lukaszczapiewski.com/projects/static-site-builder) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
+
+## Why This Exists
+
+Uses **ActionView** to render ERB templates - get the full flexibility of Rails views (partials, layouts, helpers) compiled to static HTML. Uses standard Ruby gems and familiar patterns.
+
 ## Main Objective
 
 Generate static HTML pages with JavaScript files that work. Choose your own stack:
@@ -113,11 +119,12 @@ my-site/
 
 ### Using ERB Templates
 
-Create pages in `app/views/pages/`:
+ERB templates use **ActionView** - partials, layouts, helpers, and all Rails view features work. Create pages in `app/views/pages/`:
 
 ```erb
 <h1><%= @title %></h1>
 <p><%= @description %></p>
+<%= render 'shared/footer' %>
 ```
 
 Page metadata is automatically configured in `lib/page_helpers.rb` (generated automatically):

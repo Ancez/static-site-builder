@@ -22,7 +22,7 @@ module StaticSiteBuilder
   #   generator.generate
   class Generator
     # Available template engines
-    TEMPLATE_ENGINES = %w[erb phlex].freeze
+    TEMPLATE_ENGINES = %w[erb phlex view_component].freeze
 
     # Available JavaScript bundlers
     JS_BUNDLERS = %w[importmap esbuild webpack vite none].freeze
@@ -37,7 +37,7 @@ module StaticSiteBuilder
     #
     # @param app_name [String] Name of the application/site to generate
     # @param options [Hash] Configuration options
-    # @option options [String] :template_engine ("erb") Template engine to use (erb or phlex)
+    # @option options [String] :template_engine ("erb") Template engine to use (erb, phlex, or view_component)
     # @option options [String] :js_bundler ("importmap") JavaScript bundler (importmap, esbuild, webpack, vite, none)
     # @option options [String] :css_framework ("tailwindcss") CSS framework (tailwindcss, shadcn, plain)
     # @option options [String] :js_framework ("stimulus") JavaScript framework (stimulus, react, vue, alpine, vanilla)
@@ -111,6 +111,7 @@ module StaticSiteBuilder
       ]
       gems << "importmap-rails" if @options[:js_bundler] == "importmap"
       gems << "phlex-rails" if @options[:template_engine] == "phlex"
+      gems << "view_component" if @options[:template_engine] == "view_component"
       if @options[:edit_rails]
         gems << "rails"
         gems << "edit_rails"
@@ -473,6 +474,8 @@ module StaticSiteBuilder
     def create_layout
       if @options[:template_engine] == "phlex"
         create_phlex_layout
+      elsif @options[:template_engine] == "view_component"
+        create_view_component_layout
       else
         create_erb_layout
       end
@@ -531,6 +534,52 @@ module StaticSiteBuilder
       RUBY
 
       write_file("app/views/layouts/application.rb", content)
+    end
+
+    def create_view_component_layout
+      # Create components directory
+      FileUtils.mkdir_p(@app_path.join("app/components"))
+
+      # Create the layout component class
+      component_content = <<~RUBY
+        # frozen_string_literal: true
+
+        class ApplicationLayoutComponent < ViewComponent::Base
+          def initialize(title: "Site", **options)
+            @title = title
+            @options = options
+          end
+
+          private
+
+          attr_reader :title, :options
+        end
+      RUBY
+
+      write_file("app/components/application_layout_component.rb", component_content)
+
+      # Create the ERB template for the layout
+      template_content = <<~ERB
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title><%= title %></title>
+          <link rel="stylesheet" href="/assets/stylesheets/application.css">
+        </head>
+        <body>
+          <main>
+            <%= content %>
+          </main>
+
+          #{importmap_script if @options[:js_bundler] == "importmap"}
+          #{js_script}
+        </body>
+        </html>
+      ERB
+
+      write_file("app/components/application_layout_component.html.erb", template_content)
     end
 
     def importmap_script
@@ -925,6 +974,7 @@ module StaticSiteBuilder
       # Generated sites use the static-site-builder gem
       # This file just configures it for the chosen stack
       phlex_require = @options[:template_engine] == "phlex" ? 'require "phlex-rails"' : ""
+      view_component_require = @options[:template_engine] == "view_component" ? 'require "view_component"' : ""
       importmap_require = @options[:js_bundler] == "importmap" ? 'require "importmap-rails"' : ""
       importmap_config_line = @options[:js_bundler] == "importmap" ? importmap_config : ""
 
@@ -933,6 +983,7 @@ module StaticSiteBuilder
 
         require "static_site_builder"
         #{phlex_require}
+        #{view_component_require}
         #{importmap_require}
 
         # Configure the builder for your stack
@@ -959,6 +1010,8 @@ module StaticSiteBuilder
     def create_example_pages
       if @options[:template_engine] == "phlex"
         create_phlex_example
+      elsif @options[:template_engine] == "view_component"
+        create_view_component_example
       else
         create_erb_example
       end
@@ -991,6 +1044,36 @@ module StaticSiteBuilder
       RUBY
 
       write_file("app/views/pages/index.rb", content)
+    end
+
+    def create_view_component_example
+      # Create components directory
+      FileUtils.mkdir_p(@app_path.join("app/components"))
+
+      # Create the page component
+      component_content = <<~RUBY
+        # frozen_string_literal: true
+
+        class IndexPageComponent < ViewComponent::Base
+          def initialize(title: "Welcome")
+            @title = title
+          end
+
+          private
+
+          attr_reader :title
+        end
+      RUBY
+
+      write_file("app/views/pages/index_component.rb", component_content)
+
+      # Create the ERB template for the component
+      template_content = <<~ERB
+        <h1><%= title %></h1>
+        <p>This is your generated static site.</p>
+      ERB
+
+      write_file("app/views/pages/index_component.html.erb", template_content)
     end
 
     def create_readme

@@ -15,6 +15,9 @@ rescue LoadError
   # importmap-rails is optional
 end
 
+# ViewComponent will be required when needed in compile_view_component_pages
+# to avoid loading it unnecessarily and to handle Rails dependencies
+
 module StaticSiteBuilder
   class Builder
     def initialize(root: Dir.pwd, template_engine: "erb", js_bundler: "importmap", importmap_config: nil, annotate_template_file_names: nil)
@@ -81,6 +84,10 @@ module StaticSiteBuilder
         compile_erb_pages(dist_dir)
       when "phlex"
         compile_phlex_pages(dist_dir)
+      when "view_component"
+        compile_view_component_pages(dist_dir)
+      when "view_component"
+        compile_view_component_pages(dist_dir)
       end
 
       # Copy static files (overwrites existing files)
@@ -477,6 +484,256 @@ module StaticSiteBuilder
 
       puts "Phlex compilation not yet implemented"
       # TODO: Implement Phlex page compilation
+    end
+
+    def compile_view_component_pages(dist_dir)
+      pages_dir = @root.join("app", "views", "pages")
+      return unless pages_dir.exist?
+
+      # Load all ViewComponent classes from app/views/pages and app/components
+      # This will also ensure ViewComponent is loaded
+      load_view_component_classes
+
+      # Ensure ViewComponent is available after loading
+      unless defined?(ViewComponent::Base)
+        raise "ViewComponent gem is required but not loaded. Add 'gem \"view_component\"' to your Gemfile."
+      end
+
+      # Generate importmap JSON once for all pages
+      resolver = AssetResolver.new(@root, dist_dir)
+      importmap_json_str = @importmap.to_json(resolver: resolver) if defined?(@importmap) && @importmap
+
+      # Find all ViewComponent page files (*_component.rb)
+      Dir.glob(pages_dir.join("**", "*_component.rb")).each do |component_file|
+        relative_path = Pathname.new(component_file).relative_path_from(pages_dir)
+        component_name = relative_path.to_s.gsub(/\.rb$/, "")
+        page_name = component_name.gsub(/_component$/, "").gsub(/_/, "/")
+        page_name = "index" if page_name.empty?
+        page_name = "#{page_name}.html" unless page_name.end_with?(".html")
+
+        compile_view_component_page(component_file, component_name, page_name, dist_dir, importmap_json_str)
+      end
+    end
+
+    def compile_view_component_page(component_file, component_name, page_name, dist_dir, importmap_json_str)
+      puts "Compiling #{page_name}..."
+
+      # Extract class name from file path
+      # e.g., index_component.rb -> IndexPageComponent
+      # e.g., blog/index_component.rb -> Blog::IndexPageComponent
+      # The file name pattern is: {name}_component.rb, class should be {Name}PageComponent
+      parts = component_name.split("/")
+      class_parts = parts.map do |part|
+        # Remove _component suffix and convert to PascalCase, then add "Page"
+        base_name = part.gsub(/_component$/, "")
+        pascal_case = base_name.split("_").map(&:capitalize).join
+        "#{pascal_case}Page"
+      end
+      # Join parts: for single part use no separator, for multiple use ::
+      if class_parts.length > 1
+        class_name = (class_parts + ["Component"]).join("::")
+      else
+        class_name = (class_parts + ["Component"]).join("")
+      end
+
+      # Load the component class
+      begin
+        require component_file
+        component_class = Object.const_get(class_name)
+      rescue NameError, LoadError => e
+        raise "Could not load ViewComponent class #{class_name} from #{component_file}: #{e.message}"
+      end
+
+      unless defined?(ViewComponent::Base) && component_class < ViewComponent::Base
+        raise "#{class_name} must inherit from ViewComponent::Base"
+      end
+
+      # Set current_page based on the file being compiled
+      current_page_path = if page_name == 'index.html'
+        '/'
+      else
+        "/#{page_name.gsub(/\.html$/, '')}"
+      end
+
+      # Create ActionView lookup context
+      view_paths = ActionView::PathSet.new([
+        @root.join("app", "views").to_s,
+        @root.join("app", "components").to_s
+      ])
+      lookup_context = ActionView::LookupContext.new(view_paths)
+      
+      # Create ActionView::Base instance
+      view_class = ActionView::Base.with_empty_template_cache
+      view = view_class.new(lookup_context, {}, self)
+
+      # Include PageHelpers if available
+      unless defined?(@page_helpers_loaded)
+        begin
+          page_helpers_path = @root.join('lib', 'page_helpers.rb')
+          if page_helpers_path.exist?
+            require page_helpers_path.to_s
+            @page_helpers_loaded = true
+          end
+        rescue LoadError
+          # PageHelpers not available, continue without it
+        end
+      end
+      
+      if defined?(PageHelpers)
+        view.extend(PageHelpers) unless view.singleton_class.included_modules.include?(PageHelpers)
+      end
+
+      # Set instance variables
+      view.instance_variable_set(:@js_modules, [])
+      view.instance_variable_set(:@importmap_json, importmap_json_str) if importmap_json_str
+      view.instance_variable_set(:@current_page, current_page_path)
+      
+      # Set title and metadata from PageHelpers
+      page_helpers_path = @root.join('lib', 'page_helpers.rb')
+      begin
+        if page_helpers_path.exist?
+          require page_helpers_path.to_s
+          pages = ::PageHelpers::PAGES rescue nil
+          if pages && pages.is_a?(Hash) && pages.key?(current_page_path)
+            metadata = pages[current_page_path]
+            view.instance_variable_set(:@title, metadata[:title])
+            view.instance_variable_set(:@description, metadata[:description])
+            view.instance_variable_set(:@url, metadata[:url])
+            view.instance_variable_set(:@image, metadata[:image])
+          end
+        end
+      rescue => e
+        # Silently continue if PageHelpers can't be loaded
+      end
+
+      # Render the page component
+      begin
+        page_component = component_class.new(title: view.instance_variable_get(:@title) || "Site")
+        page_content = view.render(page_component)
+      rescue => e
+        raise "Error rendering ViewComponent #{class_name}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+      end
+
+      # Annotate page content if enabled
+      if @annotate_template_file_names
+        relative_template_path = Pathname.new(component_file).relative_path_from(@root)
+        page_content = annotate_template(page_content, relative_template_path.to_s)
+      end
+
+      # Render layout component
+      layout_component_class = begin
+        layout_file = @root.join("app", "components", "application_layout_component.rb")
+        if layout_file.exist?
+          require layout_file.to_s
+          ApplicationLayoutComponent
+        else
+          nil
+        end
+      rescue LoadError, NameError
+        nil
+      end
+
+      if layout_component_class
+        # Use ViewComponent layout
+        layout_title = view.instance_variable_get(:@title) || "Site"
+        safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
+        
+        # ViewComponent's render method in ActionView accepts a block for content
+        layout_component = layout_component_class.new(title: layout_title)
+        rendered = view.render(layout_component) do
+          safe_page_content
+        end
+      else
+        # Fall back to default layout if no ViewComponent layout found
+        layout_content = default_layout
+        layout_template = ActionView::Template.new(
+          layout_content,
+          "inline:layout",
+          ActionView::Template::Handlers::ERB.new,
+          virtual_path: "layouts/application",
+          format: :html,
+          locals: [:page_content, :importmap_json, :current_page]
+        )
+        
+        safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
+        rendered = view.render(template: layout_template, locals: {
+          page_content: safe_page_content,
+          importmap_json: importmap_json_str,
+          current_page: current_page_path
+        })
+      end
+
+      # Annotate layout if enabled
+      if @annotate_template_file_names && layout_component_class
+        relative_layout_path = @root.join("app", "components", "application_layout_component.rb").relative_path_from(@root)
+        begin_comment = "<!-- BEGIN #{relative_layout_path} -->"
+        end_comment = "<!-- END #{relative_layout_path} -->"
+        rendered = "#{begin_comment}\n#{rendered}\n#{end_comment}"
+      end
+
+      output_path = dist_dir.join(page_name)
+      FileUtils.mkdir_p(output_path.dirname)
+      File.write(output_path, rendered)
+
+      puts "  ✓ Created #{page_name}"
+    end
+
+    def load_view_component_classes
+      # Ensure ViewComponent is loaded first
+      unless defined?(ViewComponent::Base)
+        begin
+          # ViewComponent requires Rails.env and Rails::VERSION, so set them up if not already defined
+          unless defined?(Rails) && Rails.respond_to?(:env)
+            require "active_support/string_inquirer"
+            unless defined?(Rails)
+              Object.const_set(:Rails, Module.new)
+            end
+            unless Rails.respond_to?(:env)
+              Rails.define_singleton_method(:env) do
+                @env ||= ActiveSupport::StringInquirer.new(ENV["RAILS_ENV"] || "production")
+              end
+            end
+            # ViewComponent also checks Rails::VERSION::MAJOR and Rails::VERSION::MINOR as constants
+            unless defined?(Rails::VERSION)
+              version_module = Module.new
+              version_module.const_set(:MAJOR, 7)
+              version_module.const_set(:MINOR, 1)
+              Rails.const_set(:VERSION, version_module)
+            end
+            # ViewComponent may also access Rails.application.routes.url_helpers
+            unless Rails.respond_to?(:application)
+              require "ostruct"
+              app = OpenStruct.new
+              routes = OpenStruct.new
+              routes.define_singleton_method(:url_helpers) { Module.new }
+              app.routes = routes
+              Rails.define_singleton_method(:application) { app }
+            end
+          end
+          
+          require "view_component"
+        rescue LoadError => e
+          raise "ViewComponent gem is required but not available. Add 'gem \"view_component\"' to your Gemfile. Error: #{e.message}"
+        end
+      end
+
+      # Load all component classes from app/components and app/views/pages
+      components_dir = @root.join("app", "components")
+      pages_dir = @root.join("app", "views", "pages")
+
+      [components_dir, pages_dir].each do |dir|
+        next unless dir.exist?
+        
+        Dir.glob(dir.join("**", "*_component.rb")).each do |file|
+          begin
+            require file.to_s
+          rescue LoadError, SyntaxError, NameError => e
+            # Skip files that can't be loaded (might be intentional)
+            file_path = Pathname.new(file)
+            puts "  ⚠️  Warning: Could not load #{file_path.relative_path_from(@root)}: #{e.message}"
+          end
+        end
+      end
     end
 
     def copy_static_files(dist_dir)
