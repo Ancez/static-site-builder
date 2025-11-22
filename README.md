@@ -48,11 +48,12 @@ A clean project structure that depends on gems:
 
 ```
 my-site/
-├── Gemfile              # Dependencies (static-site-builder, importmap-rails, etc.)
+├── Gemfile              # Dependencies (static-site-builder, sitemap_generator, etc.)
 ├── package.json         # JS dependencies (if needed)
-├── Rakefile            # Build tasks
+├── Rakefile            # Build tasks (includes sitemap generation)
 ├── config/
-│   └── importmap.rb    # Importmap config (if using importmap)
+│   ├── importmap.rb    # Importmap config (if using importmap)
+│   └── sitemap.rb      # Sitemap generation config
 ├── app/
 │   ├── views/
 │   │   ├── layouts/
@@ -61,7 +62,8 @@ my-site/
 │   ├── javascript/
 │   └── assets/
 └── lib/
-    └── site_builder.rb   # Compiles your site
+    ├── site_builder.rb   # Compiles your site
+    └── page_helpers.rb   # Page metadata (title, description, etc.)
 ```
 
 ## How It Works
@@ -109,17 +111,31 @@ my-site/
 
 ### Using ERB Templates
 
-Create pages in `app/views/pages/` with frontmatter:
+Create pages in `app/views/pages/`:
 
 ```erb
----
-title: My Page
-description: A great page
----
-
 <h1><%= @title %></h1>
 <p><%= @description %></p>
 ```
+
+Page metadata is automatically configured in `lib/page_helpers.rb` (generated automatically):
+
+```ruby
+module PageHelpers
+  PAGES = {
+    '/' => {
+      title: 'My Page',
+      description: 'A great page',
+      url: 'https://example.com',
+      image: 'https://example.com/image.jpg',
+      priority: 1.0,
+      changefreq: 'weekly'
+    }
+  }.freeze
+end
+```
+
+The builder automatically loads metadata from `PageHelpers::PAGES` and sets `@title`, `@description`, `@url`, and `@image` instance variables for use in your templates. This metadata is also used by the `sitemap_generator` gem for generating sitemaps.
 
 Use layouts in `app/views/layouts/application.html.erb`:
 
@@ -213,6 +229,18 @@ Install components and use them in your templates:
 ```bash
 npx shadcn-ui@latest add button
 ```
+
+### Generating Sitemaps
+
+Sitemap generation is automatically configured when you generate a new site. The `sitemap_generator` gem is included in the Gemfile, and `config/sitemap.rb` is automatically created.
+
+The sitemap is generated from your `PageHelpers::PAGES` metadata during `rake build:all`. Update `config/sitemap.rb` to set your domain:
+
+```ruby
+SitemapGenerator::Sitemap.default_host = 'https://yourdomain.com'
+```
+
+The sitemap will be generated in `dist/sitemaps/sitemap.xml.gz` during the build process.
 
 ## Examples
 

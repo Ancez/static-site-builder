@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2025-01-XX
+
+### Added
+- Generator now automatically creates `lib/page_helpers.rb` with `PageHelpers::PAGES` structure for page metadata
+- Generator now automatically creates `config/sitemap.rb` for sitemap generation
+- `sitemap_generator` gem is now automatically included in generated Gemfiles
+- `build:sitemap` task is automatically added to generated Rakefiles
+- Sitemap generation is integrated into `build:all` task
+
+### Changed
+- Page metadata is now managed via `PageHelpers::PAGES` hash instead of frontmatter
+- README updated to reflect `PageHelpers::PAGES` approach (frontmatter example removed)
+
 ## [0.1.3] - 2025-11-22
 
 ### Added

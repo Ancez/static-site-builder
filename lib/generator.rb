@@ -68,6 +68,8 @@ module StaticSiteBuilder
       create_config_files
       create_app_structure
       create_build_files
+      create_page_helpers
+      create_sitemap_config
       create_example_pages
       create_readme
       create_gitignore
@@ -104,7 +106,8 @@ module StaticSiteBuilder
       gems = [
         "rake",
         "static-site-builder",
-        "webrick"  # Required for dev server (removed from stdlib in Ruby 3.0+)
+        "webrick",  # Required for dev server (removed from stdlib in Ruby 3.0+)
+        "sitemap_generator"  # For generating sitemaps from PageHelpers::PAGES
       ]
       gems << "importmap-rails" if @options[:js_bundler] == "importmap"
       gems << "phlex-rails" if @options[:template_engine] == "phlex"
@@ -184,6 +187,78 @@ module StaticSiteBuilder
       create_webpack_config if @options[:js_bundler] == "webpack"
       create_vite_config if @options[:js_bundler] == "vite"
       create_rails_config if @options[:edit_rails]
+    end
+
+    def create_page_helpers
+      content = <<~RUBY
+        # frozen_string_literal: true
+
+        module PageHelpers
+          # Page metadata configuration
+          # The builder automatically loads this and sets @title, @description, @url, and @image
+          # instance variables for use in your templates.
+          # This metadata is also used by sitemap_generator for generating sitemaps.
+          PAGES = {
+            '/' => {
+              title: 'Home',
+              description: 'Welcome to my site',
+              url: 'https://example.com',
+              image: 'https://example.com/image.jpg',
+              priority: 1.0,
+              changefreq: 'weekly'
+            }
+          }.freeze
+
+          def page_title(path = nil)
+            path ||= @current_page
+            PAGES[path]&.fetch(:title) || 'Site'
+          end
+
+          def page_description(path = nil)
+            path ||= @current_page
+            PAGES[path]&.fetch(:description) || 'A static site'
+          end
+
+          def page_url(path = nil)
+            path ||= @current_page
+            PAGES[path]&.fetch(:url) || 'https://example.com'
+          end
+
+          def page_image(path = nil)
+            path ||= @current_page
+            PAGES[path]&.fetch(:image) || 'https://example.com/image.jpg'
+          end
+        end
+      RUBY
+
+      write_file("lib/page_helpers.rb", content)
+    end
+
+    def create_sitemap_config
+      content = <<~RUBY
+        # frozen_string_literal: true
+
+        require 'sitemap_generator'
+        require_relative '../lib/page_helpers'
+
+        # Configure sitemap generator
+        # Update default_host to your actual domain
+        SitemapGenerator::Sitemap.default_host = 'https://example.com'
+        SitemapGenerator::Sitemap.sitemaps_path = 'sitemaps'
+        SitemapGenerator::Sitemap.public_path = 'dist'
+
+        # Generate sitemap from PageHelpers::PAGES
+        SitemapGenerator::Sitemap.create do
+          PageHelpers::PAGES.each do |path, metadata|
+            add path,
+                lastmod: Time.now,
+                priority: metadata[:priority] || 0.5,
+                changefreq: metadata[:changefreq] || 'weekly'
+          end
+        end
+      RUBY
+
+      write_file("config/sitemap.rb", content)
     end
 
     def create_importmap_config
@@ -728,8 +803,8 @@ module StaticSiteBuilder
           require "pathname"
 
           namespace :build do
-            desc "Build everything (HTML + CSS)"
-            task :all => [:html, :css] do
+            desc "Build everything (HTML + CSS + Sitemap)"
+            task :all => [:html, :css, :sitemap] do
               puts "\\n✓ Build complete!"
             end
 
@@ -778,6 +853,11 @@ module StaticSiteBuilder
               ENV["PRODUCTION"] = "true"
               Rake::Task["build:all"].invoke
             end
+
+            desc "Generate sitemap from PageHelpers::PAGES"
+            task :sitemap do
+              require './config/sitemap'
+            end
           end
 
           namespace :dev do
@@ -798,8 +878,8 @@ module StaticSiteBuilder
           require "pathname"
 
           namespace :build do
-            desc "Build everything (HTML)"
-            task :all => [:html] do
+            desc "Build everything (HTML + Sitemap)"
+            task :all => [:html, :sitemap] do
               puts "\\n✓ Build complete!"
             end
 
@@ -819,6 +899,11 @@ module StaticSiteBuilder
             task :production do
               ENV["PRODUCTION"] = "true"
               Rake::Task["build:all"].invoke
+            end
+
+            desc "Generate sitemap from PageHelpers::PAGES"
+            task :sitemap do
+              require './config/sitemap'
             end
           end
 
