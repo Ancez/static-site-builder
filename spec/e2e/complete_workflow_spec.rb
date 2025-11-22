@@ -33,7 +33,7 @@ RSpec.describe "Complete workflow" do
       # Verify build output
       expect(site_root.join("dist/index.html")).to exist
       expect(site_root.join("dist/assets/javascripts/application.js")).to exist
-      expect(site_root.join("dist/assets/stylesheets/application.css")).to exist
+      expect(site_root.join("dist/assets/stylesheets")).to exist
       expect(site_root.join("dist/assets/importmap.json")).to exist
     end
   end

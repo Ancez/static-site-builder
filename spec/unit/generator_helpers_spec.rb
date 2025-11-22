@@ -85,7 +85,7 @@ RSpec.describe StaticSiteBuilder::Generator do
       end
 
       it "returns echo for none bundler" do
-        generator = described_class.new("test", js_bundler: "none")
+        generator = described_class.new("test", js_bundler: "none", css_framework: "plain")
         expect(generator.send(:build_script)).to include("echo")
       end
     end

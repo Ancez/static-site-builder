@@ -206,7 +206,9 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(js_file).to exist
 
       content = File.read(js_file)
-      expect(content).to include("controllers/application")
+      expect(content).to include("@hotwired/stimulus")
+      expect(content).to include("Application.start()")
+      expect(content).to include("controllers")
 
       controllers_dir = app_path.join("app/javascript/controllers")
       expect(controllers_dir).to exist

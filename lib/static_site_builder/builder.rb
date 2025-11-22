@@ -337,6 +337,24 @@ module StaticSiteBuilder
       view.instance_variable_set(:@current_page, current_page_path)
       view.instance_variable_set(:@page_content, nil)
       
+      # Set title and metadata from PageHelpers BEFORE rendering page content
+      # This ensures partials rendered within the page have access to metadata
+      page_helpers_path = @root.join('lib', 'page_helpers.rb')
+      begin
+        if page_helpers_path.exist?
+          require page_helpers_path.to_s
+          pages = ::PageHelpers::PAGES rescue nil
+          if pages && pages.is_a?(Hash) && pages.key?(current_page_path)
+            metadata = pages[current_page_path]
+            view.instance_variable_set(:@title, metadata[:title])
+            view.instance_variable_set(:@description, metadata[:description])
+            view.instance_variable_set(:@url, metadata[:url])
+            view.instance_variable_set(:@image, metadata[:image])
+          end
+        end
+      rescue => e
+        # Silently continue if PageHelpers can't be loaded
+      end
       
       # Override render to handle 'footer' -> 'shared/footer' conversion
       # and ensure locals are passed to partials
@@ -411,31 +429,6 @@ module StaticSiteBuilder
       if @annotate_template_file_names
         relative_template_path = Pathname.new(erb_file).relative_path_from(@root)
         page_content = annotate_template(page_content, relative_template_path.to_s)
-      end
-
-      # Set title and metadata from PageHelpers before rendering layout
-      puts "  DEBUG: About to set metadata for #{current_page_path}"
-      page_helpers_path = @root.join('lib', 'page_helpers.rb')
-      puts "  DEBUG: Checking PageHelpers at: #{page_helpers_path} (exists: #{page_helpers_path.exist?})"
-      begin
-        if page_helpers_path.exist?
-          require page_helpers_path.to_s
-          pages = ::PageHelpers::PAGES rescue nil
-          puts "  Pages loaded: #{pages ? 'yes' : 'no'}, keys: #{pages&.keys&.inspect}"
-          if pages && pages.is_a?(Hash) && pages.key?(current_page_path)
-            metadata = pages[current_page_path]
-            view.instance_variable_set(:@title, metadata[:title])
-            view.instance_variable_set(:@description, metadata[:description])
-            view.instance_variable_set(:@url, metadata[:url])
-            view.instance_variable_set(:@image, metadata[:image])
-            puts "  ✓ Set metadata for #{current_page_path}: #{metadata[:title]}"
-          else
-            puts "  ⚠ No metadata found for #{current_page_path}"
-          end
-        end
-      rescue => e
-        puts "  ⚠ Error loading PageHelpers: #{e.class} - #{e.message}"
-        puts e.backtrace.first(3)
       end
 
       # Render layout using ActionView

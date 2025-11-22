@@ -545,8 +545,8 @@ module StaticSiteBuilder
       case @options[:js_bundler]
       when "importmap"
         <<~ERB
-          <% if js_modules && !js_modules.empty? %>
-            <% js_modules.each do |module_name| %>
+          <% if @js_modules.present? %>
+            <% @js_modules.each do |module_name| %>
               <script type="module">import "<%= module_name %>";</script>
             <% end %>
           <% else %>

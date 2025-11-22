@@ -59,15 +59,18 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(site_root.join("dist")).to be_directory
     end
 
-    it "cleans dist directory if it exists" do
+    it "cleans dist directory if it exists in production mode" do
       dist_dir = site_root.join("dist")
       FileUtils.mkdir_p(dist_dir)
       File.write(dist_dir.join("old-file.txt"), "content")
 
+      ENV["PRODUCTION"] = "true"
       builder = described_class.new(root: site_root.to_s, js_bundler: "none")
       builder.build
 
       expect(dist_dir.join("old-file.txt")).not_to exist
+    ensure
+      ENV.delete("PRODUCTION")
     end
 
     it "copies JavaScript assets" do
