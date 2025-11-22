@@ -485,7 +485,7 @@ module StaticSiteBuilder
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title><%= frontmatter['title'] || 'Site' %></title>
+          <title><%= @title || 'Site' %></title>
           <link rel="stylesheet" href="/assets/stylesheets/application.css">
         </head>
         <body>

@@ -25,12 +25,22 @@ RSpec.describe "Full build integration" do
     end
 
     it "builds successfully" do
+      # Create page_helpers.rb with metadata
+      FileUtils.mkdir_p(site_root.join("lib"))
+      page_helpers_content = <<~RUBY
+        module PageHelpers
+          PAGES = {
+            '/' => {
+              title: 'Test Page',
+              description: 'A test page'
+            }
+          }.freeze
+        end
+      RUBY
+      File.write(site_root.join("lib/page_helpers.rb"), page_helpers_content)
+
       # Create a simple page for testing
       page_content = <<~ERB
-        ---
-        title: Test Page
-        ---
-
         <h1>Test</h1>
       ERB
 
@@ -40,7 +50,7 @@ RSpec.describe "Full build integration" do
       layout_content = <<~ERB
         <!DOCTYPE html>
         <html>
-        <head><title><%= frontmatter['title'] %></title></head>
+        <head><title><%= @title || 'Site' %></title></head>
         <body><%= page_content %></body>
         </html>
       ERB

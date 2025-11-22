@@ -25,17 +25,27 @@ RSpec.describe "Build output validation" do
       expect(content).to include("<h1>Test</h1>")
     end
 
-    it "includes frontmatter title in output" do
-      page_content = <<~ERB
-        ---
-        title: My Page
-        ---
+    it "includes PageHelpers title in output" do
+      # Create page_helpers.rb with metadata
+      FileUtils.mkdir_p(site_root.join("lib"))
+      page_helpers_content = <<~RUBY
+        module PageHelpers
+          PAGES = {
+            '/page' => {
+              title: 'My Page',
+              description: 'A test page'
+            }
+          }.freeze
+        end
+      RUBY
+      File.write(site_root.join("lib/page_helpers.rb"), page_helpers_content)
 
+      page_content = <<~ERB
         <h1>Content</h1>
       ERB
 
       create_test_page(site_root.to_s, "page.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><title><%= frontmatter['title'] %></title></head><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><title><%= @title || 'Site' %></title></head><body><%= page_content %></body></html>")
 
       builder = StaticSiteBuilder::Builder.new(root: site_root.to_s, js_bundler: "none")
       builder.build

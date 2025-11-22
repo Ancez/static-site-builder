@@ -10,7 +10,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_site_structure(site_root.to_s)
     end
 
-    it "compiles ERB page without frontmatter" do
+    it "compiles ERB page" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
@@ -24,19 +24,24 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(content).to include("<h1>Hello</h1>")
     end
 
-    it "parses frontmatter correctly" do
-      page_content = <<~ERB
-        ---
-        title: Test Page
-        layout: custom
-        js: application, controllers/test
-        ---
+    it "uses PageHelpers::PAGES metadata correctly" do
+      # Create page_helpers.rb with metadata
+      lib_dir = site_root.join("lib")
+      FileUtils.mkdir_p(lib_dir)
+      page_helpers_content = <<~RUBY
+        module PageHelpers
+          PAGES = {
+            '/test' => {
+              title: 'Test Page',
+              description: 'A test page'
+            }
+          }.freeze
+        end
+      RUBY
+      File.write(lib_dir.join("page_helpers.rb"), page_helpers_content)
 
-        <h1>Content</h1>
-      ERB
-
-      create_test_page(site_root.to_s, "test.html.erb", page_content)
-      create_test_layout(site_root.to_s, "custom.html.erb", "<html><head><title><%= frontmatter['title'] %></title></head><body><%= page_content %></body></html>")
+      create_test_page(site_root.to_s, "test.html.erb", "<h1>Content</h1>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><title><%= @title || 'Site' %></title></head><body><%= page_content %></body></html>")
 
       builder = described_class.new(root: site_root.to_s, js_bundler: "none")
       builder.build
@@ -78,12 +83,9 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(content).to include("<h1>Blog</h1>")
     end
 
-    it "handles js_modules from frontmatter" do
+    it "handles js_modules from page ERB" do
       page_content = <<~ERB
-        ---
-        js: application, controllers/test
-        ---
-
+        <% @js_modules = ['application', 'controllers/test'] %>
         <h1>Test</h1>
       ERB
 
@@ -214,15 +216,27 @@ RSpec.describe StaticSiteBuilder::Builder do
     end
 
     it "renders partials with access to page variables" do
-      # Create a partial that uses frontmatter
+      # Create page_helpers.rb with metadata
+      lib_dir = site_root.join("lib")
+      FileUtils.mkdir_p(lib_dir)
+      page_helpers_content = <<~RUBY
+        module PageHelpers
+          PAGES = {
+            '/' => {
+              title: 'My Page Title',
+              description: 'A test page'
+            }
+          }.freeze
+        end
+      RUBY
+      File.write(lib_dir.join("page_helpers.rb"), page_helpers_content)
+
+      # Create a partial that uses @title
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
-      File.write(shared_dir.join("_title.html.erb"), "<h1><%= frontmatter['title'] %></h1>")
+      File.write(shared_dir.join("_title.html.erb"), "<h1><%= @title %></h1>")
       
       page_content = <<~ERB
-        ---
-        title: My Page Title
-        ---
         <div>
           <%= render 'shared/title' %>
           <p>Content</p>
