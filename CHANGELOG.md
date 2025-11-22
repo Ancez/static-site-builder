@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.4] - 2025-01-XX
+## [0.1.4] - 2025-11-22
 
 ### Added
 - Generator now automatically creates `lib/page_helpers.rb` with `PageHelpers::PAGES` structure for page metadata
@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Page metadata is now managed via `PageHelpers::PAGES` hash instead of frontmatter
 - README updated to reflect `PageHelpers::PAGES` approach (frontmatter example removed)
+- ActionView requirement changed from `>= 8.0` to `~> 7.1` for Ruby 3.1 compatibility
+- Generated layouts now use `@title` and `@js_modules` instance variables instead of frontmatter
+
+### Fixed
+- Fixed `js_modules` variable reference in generated layouts (now uses `@js_modules`)
+- Fixed PageHelpers metadata loading to occur before page content rendering, allowing partials to access `@title`, `@description`, etc.
+- Removed all frontmatter parsing code and references
+- Updated all specs to use `PageHelpers::PAGES` instead of frontmatter
 
 ## [0.1.3] - 2025-11-22
 
@@ -30,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Replaced raw ERB implementation with ActionView::Base for template rendering
 - Render method now uses ActionView's rendering system, matching Rails behaviour exactly
-- Partials automatically receive page variables (frontmatter, js_modules, importmap_json, current_page)
+- Partials automatically receive page variables (@js_modules, importmap_json, current_page)
 - Improved error messages for missing partials (converted from ActionView format for backwards compatibility)
 - Template annotations now preserve both page and layout annotations correctly
 
@@ -52,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `render` helper method for ERB templates to include partials
 - Support for rendering partials from `app/views/shared/` directory
 - Partial files should be named with `_` prefix (e.g., `_header.html.erb`)
-- Partials have access to page variables (frontmatter, js_modules, etc.)
+- Partials have access to page variables (@js_modules, etc.)
 
 ### Changed
 - Improved ERB compilation to support partial rendering
@@ -67,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for multiple JavaScript bundlers (Importmap, ESBuild, Webpack, Vite, None)
 - Support for multiple CSS frameworks (TailwindCSS, shadcn/ui, Plain CSS)
 - Support for multiple JavaScript frameworks (Stimulus, React, Vue, Alpine.js, Vanilla)
-- Frontmatter parsing for ERB pages
+- Page metadata via `PageHelpers::PAGES` hash
 - Layout support with nested layouts
 - Importmap JSON generation
 - Asset copying (JavaScript, CSS, vendor files, static files)
