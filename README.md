@@ -318,20 +318,25 @@ The `dist/` directory contains your complete static site and can be deployed to 
 
 ### Cloudflare Pages
 
-1. **Connect your repository** to Cloudflare Pages in the Cloudflare dashboard
+1. **Create `wrangler.toml`** in your project root:
+   ```toml
+   name = 'your-worker-name'
+   compatibility_date = '2025-01-22'
+   ```
+   
+   Replace `your-worker-name` with your desired Worker name (must match your Cloudflare Pages project name).
 
-2. **Build settings**:
-   - **Build command**: `bundle install && npm install && bundle exec rake build:all`
-   - **Build output directory**: `dist`
-   - **Root directory**: (leave empty or set to repository root)
+2. **Connect your repository** to Cloudflare Pages in the Cloudflare dashboard
 
-3. **Environment variables** (if needed):
-   - `RUBY_VERSION`: Set to your Ruby version (e.g., `3.4`)
-   - `NODE_VERSION`: Set to your Node.js version (e.g., `24`)
+3. **Build settings**:
+   - **Build command**: `rake build:all`
+   - **Deploy command**: `npx wrangler deploy --assets=./dist`
+   - **Version command**: `npx wrangler versions upload`
+   - **Root directory**: `/`
 
 4. **Deploy**: Cloudflare Pages will automatically build and deploy on every push to your main branch
 
-**Note**: Cloudflare Pages supports Ruby and Node.js builds. Ensure your `Gemfile` and `package.json` are properly configured.
+**Note**: Ensure your `Gemfile` and `package.json` are properly configured. The build process will install dependencies automatically.
 
 ### Vercel
 
