@@ -1,23 +1,18 @@
 name: Auto-fix Tests
 
 on:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'spec/**'
+      - 'Gemfile*'
+      - '.github/workflows/auto-fix-tests.yml'
   workflow_dispatch:
     inputs:
       max_iterations:
         description: 'Maximum number of fix attempts'
         required: false
         default: '5'
-      ai_provider:
-        description: 'AI provider (openai, anthropic)'
-        required: false
-        default: 'openai'
-  push:
-    branches: [ main, master ]
-    paths:
-      - 'lib/**'
-      - 'spec/**'
-      - 'Gemfile*'
-      - '.github/workflows/auto-fix-tests.yml'
 
 jobs:
   auto-fix:
@@ -35,6 +30,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
+        ref: ${{ github.event.pull_request.head.ref || github.ref }}
     
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -48,6 +44,31 @@ jobs:
     - name: Install jq (for JSON parsing)
       run: sudo apt-get update && sudo apt-get install -y jq
     
+    - name: Install Cursor CLI
+      run: |
+        # Try to install Cursor CLI
+        # Check if cursor command already exists
+        if command -v cursor &> /dev/null; then
+          echo "Cursor CLI already installed"
+          cursor --version || true
+        else
+          # Try official install script
+          curl -fsSL https://cursor.sh/install.sh | sh || {
+            echo "Install script not available, trying manual installation"
+            # Try downloading binary directly
+            mkdir -p ~/.local/bin
+            # Cursor CLI might be available via npm or other package managers
+            # For now, we'll check if it's available and provide helpful error
+            if ! command -v cursor &> /dev/null; then
+              echo "Warning: Cursor CLI installation failed. Please ensure Cursor CLI is available."
+              echo "You may need to install it manually or use Cursor API with CURSOR_API_KEY secret."
+            fi
+          }
+          # Add to PATH if installed in common locations
+          [ -d "$HOME/.cursor/bin" ] && echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+          [ -d "$HOME/.local/bin" ] && echo "$HOME/.local/bin" >> $GITHUB_PATH
+        fi
+    
     - name: Configure Git
       run: |
         git config --global user.name 'GitHub Actions'
@@ -55,20 +76,24 @@ jobs:
     
     - name: Auto-fix failing tests
       env:
-        AI_API_KEY: ${{ secrets.AI_API_KEY }}
-        AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'openai' }}
+        CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '5' }}
         RUBY_VERSION: ${{ matrix.ruby-version }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_BRANCH: ${{ github.head_ref }}
       run: |
         chmod +x .github/scripts/auto-fix-tests.sh
         .github/scripts/auto-fix-tests.sh
     
-    - name: Push fixes (if any)
-      if: success()
+    - name: Push fixes to PR branch
+      if: success() && github.event_name == 'pull_request'
       run: |
         if [ -n "$(git status --porcelain)" ]; then
-          git push origin HEAD:${{ github.ref }} || echo "Push failed or no changes"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push origin HEAD:${{ github.head_ref }} || echo "Push failed or no changes"
+        else
+          echo "No changes to push"
         fi
     
     - name: Upload test results

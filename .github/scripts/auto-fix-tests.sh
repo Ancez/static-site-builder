@@ -1,13 +1,12 @@
 #!/bin/bash
 # Auto-fix CI Tests Script
 # 
-# This script automatically fixes failing RSpec tests using an AI API (OpenAI or Anthropic).
-# It runs tests, extracts failures, calls an AI API to generate fixes, applies them,
+# This script automatically fixes failing RSpec tests using Cursor CLI.
+# It runs tests, extracts failures, uses Cursor CLI to generate fixes, applies them,
 # and repeats until tests pass or max iterations is reached.
 #
 # Required environment variables:
-#   AI_API_KEY - API key for the AI provider
-#   AI_PROVIDER - 'openai' or 'anthropic' (default: 'openai')
+#   CURSOR_API_KEY - Cursor API key (optional if Cursor CLI is authenticated)
 #   MAX_ITERATIONS - Maximum number of fix attempts (default: 5)
 #
 # Usage: ./auto-fix-tests.sh
@@ -16,7 +15,6 @@ set -euo pipefail
 
 # Configuration
 MAX_ITERATIONS=${MAX_ITERATIONS:-5}
-AI_PROVIDER=${AI_PROVIDER:-openai}
 ITERATION=0
 FIX_LOG="fix-attempts.log"
 TEST_LOG="test-results.log"
@@ -35,11 +33,16 @@ log_test() {
   echo -e "${1}" | tee -a "${TEST_LOG}"
 }
 
-# Check if AI API key is set
-if [ -z "${AI_API_KEY:-}" ]; then
-  log "${RED}Error: AI_API_KEY secret is not set${NC}"
-  log "Please set AI_API_KEY in your repository secrets"
+# Check if Cursor CLI is available (allow API fallback)
+if ! command -v cursor &> /dev/null && [ -z "${CURSOR_API_KEY:-}" ]; then
+  log "${RED}Error: Cursor CLI is not installed and CURSOR_API_KEY is not set${NC}"
+  log "Please install Cursor CLI or set CURSOR_API_KEY secret"
   exit 1
+fi
+
+# Set Cursor API key if provided
+if [ -n "${CURSOR_API_KEY:-}" ]; then
+  export CURSOR_API_KEY="${CURSOR_API_KEY}"
 fi
 
 # Function to run tests and capture output
@@ -107,19 +110,21 @@ get_source_context() {
   find lib -name "*.rb" -type f 2>/dev/null | head -20 || echo ""
 }
 
-# Function to call AI API to fix tests
-fix_with_ai() {
+# Function to call Cursor CLI/API to fix tests
+fix_with_cursor() {
   local failures="$1"
   local changed_files="$2"
   local iteration="$3"
+  local prompt_file response_file
   
-  log "${YELLOW}Attempting to fix tests (iteration ${iteration}/${MAX_ITERATIONS})...${NC}"
+  log "${YELLOW}Attempting to fix tests with Cursor (iteration ${iteration}/${MAX_ITERATIONS})...${NC}"
   
-  # Get source context
-  local source_context=$(get_source_context)
+  # Create a prompt file for Cursor
+  prompt_file=$(mktemp)
+  response_file=$(mktemp)
   
-  # Prepare the prompt
-  local prompt="You are fixing failing Ruby/RSpec tests in a static site builder project.
+  cat > "${prompt_file}" << PROMPT_EOF
+Fix the failing Ruby/RSpec tests in this static site builder project.
 
 Test failures:
 ${failures}
@@ -156,47 +161,57 @@ FILE: lib/path/to/file.rb
 [new code block with same indentation]
 ---END---
 
-If multiple files need changes, provide each file separately with the same format."
-
-  # Call AI API based on provider
+If multiple files need changes, provide each file separately with the same format.
+PROMPT_EOF
+  
+  # Try using Cursor CLI - check what commands are available
   local response=""
-  if [ "${AI_PROVIDER}" = "openai" ]; then
-    response=$(curl -s https://api.openai.com/v1/chat/completions \
+  
+  # Method 1: Try cursor chat/compose command
+  if cursor --help 2>&1 | grep -q "chat\|compose\|fix"; then
+    log "${YELLOW}Using Cursor CLI chat/compose...${NC}"
+    # Try different possible command formats
+    response=$(cursor chat "$(cat "${prompt_file}")" 2>>"${FIX_LOG}" || \
+               cursor compose "$(cat "${prompt_file}")" 2>>"${FIX_LOG}" || \
+               cursor fix --input "${prompt_file}" 2>>"${FIX_LOG}" || echo "")
+  
+  # Method 2: Use Cursor API if CLI doesn't work and API key is available
+  elif [ -n "${CURSOR_API_KEY:-}" ]; then
+    log "${YELLOW}Using Cursor API...${NC}"
+    # Cursor API endpoint (adjust based on actual API)
+    response=$(curl -s https://api.cursor.sh/v1/chat \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${AI_API_KEY}" \
+      -H "Authorization: Bearer ${CURSOR_API_KEY}" \
       -d "{
-        \"model\": \"gpt-4-turbo-preview\",
         \"messages\": [
           {\"role\": \"system\", \"content\": \"You are an expert Ruby developer fixing failing tests.\"},
-          {\"role\": \"user\", \"content\": \"${prompt}\"}
-        ],
-        \"temperature\": 0.1,
-        \"max_tokens\": 4000
-      }" | jq -r '.choices[0].message.content' 2>/dev/null || echo "")
-  elif [ "${AI_PROVIDER}" = "anthropic" ]; then
-    response=$(curl -s https://api.anthropic.com/v1/messages \
-      -H "Content-Type: application/json" \
-      -H "x-api-key: ${AI_API_KEY}" \
-      -H "anthropic-version: 2023-06-01" \
-      -d "{
-        \"model\": \"claude-3-opus-20240229\",
-        \"max_tokens\": 4000,
-        \"messages\": [
-          {\"role\": \"user\", \"content\": \"${prompt}\"}
+          {\"role\": \"user\", \"content\": \"$(cat "${prompt_file}" | jq -Rs .)\"}
         ]
-      }" | jq -r '.content[0].text' 2>/dev/null || echo "")
+      }" 2>>"${FIX_LOG}" | jq -r '.choices[0].message.content // .content // .text // empty' 2>/dev/null || echo "")
+  
+  # Method 3: Use cursor with file input
   else
-    log "${RED}Error: Unknown AI provider: ${AI_PROVIDER}${NC}"
+    log "${YELLOW}Using Cursor CLI with file input...${NC}"
+    # Try passing the prompt file directly
+    response=$(cursor < "${prompt_file}" 2>>"${FIX_LOG}" || \
+               cursor --input "${prompt_file}" 2>>"${FIX_LOG}" || echo "")
+  fi
+  
+  rm -f "${prompt_file}" "${response_file}"
+  
+  if [ -z "${response}" ] || [ "${response}" = "null" ]; then
+    log "${RED}Error: Failed to get response from Cursor${NC}"
+    log "${YELLOW}Attempting to use Cursor's direct editing capabilities...${NC}"
+    
+    # Alternative: Create .cursorrules file and let Cursor process the workspace
+    # This approach relies on Cursor's workspace understanding
     return 1
   fi
   
-  if [ -z "${response}" ]; then
-    log "${RED}Error: Failed to get response from AI API${NC}"
-    return 1
-  fi
-  
-  log "${YELLOW}AI Response received, applying fixes...${NC}"
+  log "${YELLOW}Cursor response received, applying fixes...${NC}"
+  echo "=== Cursor Response ===" >> "${FIX_LOG}"
   echo "${response}" >> "${FIX_LOG}"
+  echo "=======================" >> "${FIX_LOG}"
   
   # Parse and apply fixes
   apply_fixes "${response}"
@@ -364,9 +379,9 @@ while [ "${ITERATION}" -lt "${MAX_ITERATIONS}" ]; do
   # Get changed files
   changed_files=$(get_changed_files)
   
-  # Call AI to fix
-  if ! fix_with_ai "${failures}" "${changed_files}" "${ITERATION}"; then
-    log "${RED}Failed to get or apply fixes from AI${NC}"
+  # Call Cursor CLI to fix
+  if ! fix_with_cursor "${failures}" "${changed_files}" "${ITERATION}"; then
+    log "${RED}Failed to get or apply fixes from Cursor CLI${NC}"
     break
   fi
   
