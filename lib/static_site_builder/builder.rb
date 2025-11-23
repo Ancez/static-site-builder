@@ -663,10 +663,29 @@ module StaticSiteBuilder
           template_file_path = component_file.sub(/\.rb$/, ".html.erb")
           if File.exist?(template_file_path)
             # Render the template file directly using ActionView
-            # Set component instance variables on the view so templates can access them like ViewComponent
+            # ViewComponent templates are rendered in the context of the component,
+            # so we need to make component methods and instance variables available to the view
+            
+            # Set component instance variables on the view
             page_component.instance_variables.each do |ivar|
               view.instance_variable_set(ivar, page_component.instance_variable_get(ivar))
             end
+            
+            # Make component methods available to the template by extending the view
+            # This allows templates to call methods like `title` that exist on the component
+            # Include both public and private methods since ViewComponent templates can access private methods
+            component_methods_module = Module.new do
+              # Get all methods (public and private) excluding Object methods
+              all_methods = (page_component.methods(false) + page_component.private_methods(false)).uniq
+              all_methods.each do |method_name|
+                # Skip methods that might conflict with ActionView
+                next if [:render, :output_buffer, :output_buffer=].include?(method_name)
+                define_method(method_name) do |*args, &block|
+                  page_component.send(method_name, *args, &block)
+                end
+              end
+            end
+            view.extend(component_methods_module)
             
             template_content = File.read(template_file_path)
             # Extract local variable names from instance variables for ActionView::Template
