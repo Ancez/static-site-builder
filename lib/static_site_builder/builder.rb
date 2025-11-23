@@ -669,12 +669,15 @@ module StaticSiteBuilder
             end
             
             template_content = File.read(template_file_path)
+            # Extract local variable names from instance variables for ActionView::Template
+            local_names = page_component.instance_variables.map { |ivar| ivar.to_s.delete('@').to_sym }
             template = ActionView::Template.new(
               template_content,
               template_file_path,
               ActionView::Template::Handlers::ERB.new,
               virtual_path: template_file_path,
-              format: :html
+              format: :html,
+              locals: local_names
             )
             page_content = view.render(template: template)
           else
