@@ -671,38 +671,41 @@ module StaticSiteBuilder
               view.instance_variable_set(ivar, page_component.instance_variable_get(ivar))
             end
             
-            # Make component methods available to the template by extending the view
-            # This allows templates to call methods like `title` that exist on the component
+            # Make component methods available to the template
             # ViewComponent templates are rendered in the component's context, so methods are directly accessible
+            # Define methods directly on the view's singleton class for better compatibility
             component_ref = page_component
-            component_methods_module = Module.new do
-              # Explicitly define methods for instance variables (like attr_reader does)
-              # This covers common patterns like `attr_reader :title`
-              component_ref.instance_variables.each do |ivar|
-                method_name = ivar.to_s.delete('@').to_sym
-                # Skip if method already exists or conflicts with ActionView
-                next if [:render, :output_buffer, :output_buffer=].include?(method_name)
-                # Define getter method
-                define_method(method_name) do
-                  component_ref.instance_variable_get(ivar)
-                end
-              end
-              
-              # Use method_missing as fallback for other methods
-              define_method(:method_missing) do |method_name, *args, &block|
-                # Delegate to component if it responds to the method and it's not an ActionView method
-                if component_ref.respond_to?(method_name, true) && ![:render, :output_buffer, :output_buffer=].include?(method_name)
-                  component_ref.send(method_name, *args, &block)
-                else
-                  super(method_name, *args, &block)
-                end
-              end
-              
-              define_method(:respond_to_missing?) do |method_name, include_private|
-                component_ref.respond_to?(method_name, include_private) || super(method_name, include_private)
+            view_singleton = class << view; self; end
+            
+            # Explicitly define getter methods for instance variables (like attr_reader does)
+            # This covers common patterns like `attr_reader :title`
+            # Capture component_ref and ivar in the closure properly
+            page_component.instance_variables.each do |ivar|
+              method_name = ivar.to_s.delete('@').to_sym
+              # Skip if method already exists or conflicts with ActionView
+              next if [:render, :output_buffer, :output_buffer=].include?(method_name)
+              # Capture the ivar name in the closure
+              captured_ivar = ivar
+              # Define getter method that accesses the component's instance variable
+              # Methods defined on singleton class are available on the instance
+              view_singleton.define_method(method_name) do
+                component_ref.instance_variable_get(captured_ivar)
               end
             end
-            view.extend(component_methods_module)
+            
+            # Use method_missing as fallback for other component methods
+            view_singleton.define_method(:method_missing) do |method_name, *args, &block|
+              # Delegate to component if it responds to the method and it's not an ActionView method
+              if component_ref.respond_to?(method_name, true) && ![:render, :output_buffer, :output_buffer=].include?(method_name)
+                component_ref.send(method_name, *args, &block)
+              else
+                super(method_name, *args, &block)
+              end
+            end
+            
+            view_singleton.define_method(:respond_to_missing?) do |method_name, include_private|
+              component_ref.respond_to?(method_name, include_private) || super(method_name, include_private)
+            end
             
             template_content = File.read(template_file_path)
             # Extract local variable names from instance variables for ActionView::Template
