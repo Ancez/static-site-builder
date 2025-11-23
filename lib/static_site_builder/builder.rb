@@ -673,16 +673,33 @@ module StaticSiteBuilder
             
             # Make component methods available to the template by extending the view
             # This allows templates to call methods like `title` that exist on the component
-            # Include both public and private methods since ViewComponent templates can access private methods
+            # ViewComponent templates are rendered in the component's context, so methods are directly accessible
+            component_ref = page_component
             component_methods_module = Module.new do
-              # Get all methods (public and private) excluding Object methods
-              all_methods = (page_component.methods(false) + page_component.private_methods(false)).uniq
-              all_methods.each do |method_name|
-                # Skip methods that might conflict with ActionView
+              # Explicitly define methods for instance variables (like attr_reader does)
+              # This covers common patterns like `attr_reader :title`
+              component_ref.instance_variables.each do |ivar|
+                method_name = ivar.to_s.delete('@').to_sym
+                # Skip if method already exists or conflicts with ActionView
                 next if [:render, :output_buffer, :output_buffer=].include?(method_name)
-                define_method(method_name) do |*args, &block|
-                  page_component.send(method_name, *args, &block)
+                # Define getter method
+                define_method(method_name) do
+                  component_ref.instance_variable_get(ivar)
                 end
+              end
+              
+              # Use method_missing as fallback for other methods
+              define_method(:method_missing) do |method_name, *args, &block|
+                # Delegate to component if it responds to the method and it's not an ActionView method
+                if component_ref.respond_to?(method_name, true) && ![:render, :output_buffer, :output_buffer=].include?(method_name)
+                  component_ref.send(method_name, *args, &block)
+                else
+                  super(method_name, *args, &block)
+                end
+              end
+              
+              define_method(:respond_to_missing?) do |method_name, include_private|
+                component_ref.respond_to?(method_name, include_private) || super(method_name, include_private)
               end
             end
             view.extend(component_methods_module)
