@@ -1,9 +1,13 @@
 #!/bin/bash
-# Auto-fix CI Tests Script
+# Auto-fix CI Bugs Script
 # 
-# This script automatically fixes failing RSpec tests using Cursor CLI.
-# It runs tests, extracts failures, uses Cursor CLI to generate fixes, applies them,
-# and repeats until tests pass or max iterations is reached.
+# This script automatically fixes bugs/errors in code by analysing failing RSpec tests.
+# It runs tests, extracts failures, identifies the ROOT CAUSE bug/error, uses Cursor CLI
+# to generate fixes for the actual bug (not the test), applies them, and repeats until
+# tests pass or max iterations is reached.
+#
+# IMPORTANT: This fixes bugs in the implementation code, not the tests themselves.
+# Tests define correct behaviour - the script fixes the code to match.
 #
 # Required environment variables:
 #   CURSOR_API_KEY - Cursor API key (optional if Cursor CLI is authenticated)
@@ -67,25 +71,40 @@ run_tests() {
 # Function to extract test failures from JSON output
 extract_failures() {
   local failures=""
+  local error_details=""
   
   if [ -f test-output.json ]; then
     # Extract failure messages using jq if available
     if command -v jq &> /dev/null; then
-      failures=$(jq -r '.examples[] | select(.status == "failed") | "\(.full_description)\n\(.exception.message)\n\(.exception.backtrace[0:3] | join("\n"))\n---"' test-output.json 2>/dev/null || echo "")
+      # Get detailed failure information including what was expected vs actual
+      failures=$(jq -r '.examples[] | select(.status == "failed") | 
+        "Test: \(.full_description)\n" +
+        "Error: \(.exception.message // "No error message")\n" +
+        "Expected: \(.exception.expected // "N/A")\n" +
+        "Got: \(.exception.got // "N/A")\n" +
+        "Location: \(.file_path):\(.line_number // "unknown")\n" +
+        "Backtrace:\n\(.exception.backtrace[0:5] | join("\n"))\n---\n"' test-output.json 2>/dev/null || echo "")
+      
+      # Also extract the actual error/exception class
+      error_details=$(jq -r '.examples[] | select(.status == "failed") | 
+        "Exception class: \(.exception.class // "Unknown")\n" +
+        "Failure message: \(.exception.message // "No message")\n"' test-output.json 2>/dev/null | head -10 || echo "")
     fi
   fi
   
   # Fallback: extract from test output log
   if [ -z "${failures}" ]; then
-    failures=$(grep -A 10 "FAILED\|Failure/Error\|expected:" "${TEST_LOG}" | tail -50 || echo "")
+    failures=$(grep -A 15 "FAILED\|Failure/Error\|expected:\|got:" "${TEST_LOG}" | tail -80 || echo "")
   fi
   
-  # Also include the last 30 lines of test output for context
+  # Include error context from test output
   if [ -f "${TEST_LOG}" ]; then
-    failures="${failures}"$'\n\n'"Recent test output:"$'\n'"$(tail -30 "${TEST_LOG}")"
+    local error_context=$(grep -B 5 -A 15 "Failure/Error\|expected:\|got:\|Error:" "${TEST_LOG}" | tail -50 || echo "")
+    failures="${failures}"$'\n\n'"Error context:"$'\n'"${error_context}"
   fi
   
-  echo "${failures}"
+  # Combine all failure information
+  echo "${error_details}"$'\n\n'"${failures}"
 }
 
 # Function to get file changes from git
@@ -123,20 +142,49 @@ fix_with_cursor() {
   prompt_file=$(mktemp)
   response_file=$(mktemp)
   
+  # Get the actual source files that are being tested to understand what's being verified
+  local failing_spec_files=""
+  if [ -f test-output.json ] && command -v jq &> /dev/null; then
+    failing_spec_files=$(jq -r '.examples[] | select(.status == "failed") | "\(.file_path):\(.line_number // "?") - \(.full_description)"' test-output.json 2>/dev/null | head -10 || echo "")
+  fi
+  
+  # Get relevant source code context for files that might have bugs
+  local source_context=""
+  if [ -n "${changed_files}" ]; then
+    for file in ${changed_files}; do
+      if [[ "${file}" =~ ^lib/.*\.rb$ ]] && [ -f "${file}" ]; then
+        source_context="${source_context}\n\n=== ${file} ===\n$(head -50 "${file}" 2>/dev/null || echo "Could not read file")"
+      fi
+    done
+  fi
+  
   cat > "${prompt_file}" << PROMPT_EOF
-Fix the failing Ruby/RSpec tests in this static site builder project.
+CRITICAL: Fix the ROOT CAUSE of the bug/error, not just make tests pass.
 
-Test failures:
+Test failures and errors:
 ${failures}
 
-Files that may need fixing:
+Failing test files and what they're testing:
+${failing_spec_files}
+
+Files that may contain the bug:
 ${changed_files}
 
+Source code context (first 50 lines of potentially buggy files):
+${source_context}
+
 Project structure:
-- lib/ contains the main code (generator.rb, static_site_builder/*.rb)
-- spec/ contains RSpec tests
+- lib/ contains the main implementation code (generator.rb, static_site_builder/*.rb)
+- spec/ contains RSpec tests that verify the implementation
 - Uses RSpec for testing with SimpleCov
-- Follows Ruby best practices
+
+IMPORTANT INSTRUCTIONS:
+1. ANALYSE the actual error/bug first - what is the test trying to verify?
+2. Identify the ROOT CAUSE in the implementation code (lib/ files)
+3. Fix the BUG in the implementation, not the test
+4. The test is likely correct - it's exposing a real bug in the code
+5. Only modify test files if they contain actual errors (wrong expectations, typos, etc.)
+6. Fix the implementation to match what the test expects (the test defines correct behaviour)
 
 Code style requirements:
 - Use single quotes instead of double quotes unless interpolating
@@ -145,20 +193,30 @@ Code style requirements:
 - Avoid unnecessary abstractions
 - Test files use RSpec with expect syntax, no let(:v) blocks
 
-Requirements:
-1. Analyse the test failures carefully
-2. Fix ONLY the code in lib/ files to make tests pass
-3. Do NOT modify test files (spec/) unless absolutely necessary
-4. Ensure fixes are minimal and targeted - only change what's needed
-5. Follow existing code style exactly
-6. Preserve all existing functionality
+What to fix (ROOT CAUSE ANALYSIS):
+- If test expects a method to return X but it returns Y → fix the method implementation (the bug is in the method logic)
+- If test expects an exception but none is raised → fix the code to raise the exception when appropriate (missing error handling)
+- If test expects a file to be created but it isn't → fix the code that creates files (missing file creation logic)
+- If test expects certain output but gets different → fix the code generating the output (wrong output generation)
+- If test expects a value but gets nil → fix the code that should return that value (missing return/value assignment)
+- If test expects an array/hash with items but gets empty → fix the code that populates it (missing population logic)
+- If test fails with NoMethodError → fix the code to define the missing method or fix the method call
+- If test fails with ArgumentError → fix the method signature or the way it's called
+- Only fix tests if they have wrong expectations, typos, or are testing the wrong thing
 
-Provide ONLY the code changes needed in this exact format:
+ANALYSIS PROCESS:
+1. Read the error message carefully - what exactly went wrong?
+2. Look at the backtrace - where in the code did it fail?
+3. Understand what the test expects - what is the correct behaviour?
+4. Find the bug in the implementation code that causes incorrect behaviour
+5. Fix the bug to make the code behave correctly (as the test expects)
+
+Provide ONLY the code changes needed to fix the ROOT CAUSE in this exact format:
 FILE: lib/path/to/file.rb
 ---OLD---
-[exact code block to replace, including proper indentation]
+[exact code block with the bug, including proper indentation]
 ---NEW---
-[new code block with same indentation]
+[fixed code block with bug resolved, same indentation]
 ---END---
 
 If multiple files need changes, provide each file separately with the same format.
@@ -184,7 +242,7 @@ PROMPT_EOF
       -H "Authorization: Bearer ${CURSOR_API_KEY}" \
       -d "{
         \"messages\": [
-          {\"role\": \"system\", \"content\": \"You are an expert Ruby developer fixing failing tests.\"},
+          {\"role\": \"system\", \"content\": \"You are an expert Ruby developer. Your job is to ANALYSE test failures, identify the ROOT CAUSE bug/error in the implementation code, and fix the actual bug - NOT just make tests pass. Tests define correct behaviour - fix the code to match.\"},
           {\"role\": \"user\", \"content\": \"$(cat "${prompt_file}" | jq -Rs .)\"}
         ]
       }" 2>>"${FIX_LOG}" | jq -r '.choices[0].message.content // .content // .text // empty' 2>/dev/null || echo "")
@@ -390,8 +448,16 @@ while [ "${ITERATION}" -lt "${MAX_ITERATIONS}" ]; do
     log "${YELLOW}No changes to commit${NC}"
   else
     git add -A
-    git commit -m "Auto-fix: Fix failing tests (attempt ${ITERATION})" || true
-    log "${GREEN}Committed fixes${NC}"
+    # Create a descriptive commit message about the bug fix
+    local commit_msg="Auto-fix: Fix root cause bug/error (attempt ${ITERATION})"
+    if [ -f test-output.json ] && command -v jq &> /dev/null; then
+      local first_failure=$(jq -r '.examples[] | select(.status == "failed") | .exception.message' test-output.json 2>/dev/null | head -1)
+      if [ -n "${first_failure}" ] && [ "${first_failure}" != "null" ]; then
+        commit_msg="Auto-fix: Fix bug - ${first_failure:0:100} (attempt ${ITERATION})"
+      fi
+    fi
+    git commit -m "${commit_msg}" || true
+    log "${GREEN}Committed bug fixes${NC}"
   fi
   
   # Re-run tests
