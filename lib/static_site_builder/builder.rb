@@ -552,6 +552,46 @@ module StaticSiteBuilder
         raise "#{class_name} must inherit from ViewComponent::Base"
       end
 
+      # Override template path to match the file name convention
+      # ViewComponent expects templates named after the class (e.g., IndexPageComponent -> index_page_component.html.erb)
+      # But we use the file name convention (e.g., index_component.html.erb)
+      template_file = component_file.sub(/\.rb$/, ".html.erb")
+      template_file_path = Pathname.new(template_file)
+      
+      if template_file_path.exist?
+        # ViewComponent 4.x looks for templates based on the component class name
+        # We need to override this to use our file naming convention
+        # The simplest way is to define a render method that uses our template file
+        component_class.class_eval do
+          # Store the template file path
+          @_vc_custom_template_file = template_file_path.to_s
+          
+          # Override ViewComponent's template lookup
+          # ViewComponent 4.x uses a compiler, we need to tell it about our template
+          if respond_to?(:compile)
+            # Clear compilation cache to force recompilation
+            remove_instance_variable(:@__vc_compiled) if instance_variable_defined?(:@__vc_compiled)
+          end
+        end
+        
+        # Use ViewComponent's compiler API to set the template
+        # ViewComponent 4.x stores template information in the compiler
+        begin
+          if defined?(ViewComponent::Compiler)
+            # Get or create compiler for this component
+            compiler = ViewComponent::Compiler.new(component_class)
+            # Set the template file if the compiler supports it
+            if compiler.respond_to?(:template=)
+              compiler.template = template_file_path.to_s
+            elsif compiler.instance_variable_defined?(:@template)
+              compiler.instance_variable_set(:@template, template_file_path.to_s)
+            end
+          end
+        rescue => e
+          # If compiler API doesn't work, we'll handle it in rendering
+        end
+      end
+
       # Set current_page based on the file being compiled
       current_page_path = if page_name == 'index.html'
         '/'
@@ -613,7 +653,34 @@ module StaticSiteBuilder
       # Render the page component
       begin
         page_component = component_class.new(title: view.instance_variable_get(:@title) || "Site")
-        page_content = view.render(page_component)
+        
+        # Try to render using ViewComponent's standard rendering
+        # If that fails due to template not found, render the template manually
+        begin
+          page_content = view.render(page_component)
+        rescue ViewComponent::TemplateError => e
+          # ViewComponent couldn't find the template, render it manually using ActionView
+          template_file_path = component_file.sub(/\.rb$/, ".html.erb")
+          if File.exist?(template_file_path)
+            # Render the template file directly using ActionView
+            # Set component instance variables on the view so templates can access them like ViewComponent
+            page_component.instance_variables.each do |ivar|
+              view.instance_variable_set(ivar, page_component.instance_variable_get(ivar))
+            end
+            
+            template_content = File.read(template_file_path)
+            template = ActionView::Template.new(
+              template_content,
+              template_file_path,
+              ActionView::Template::Handlers::ERB.new,
+              virtual_path: template_file_path,
+              format: :html
+            )
+            page_content = view.render(template: template)
+          else
+            raise e
+          end
+        end
       rescue => e
         raise "Error rendering ViewComponent #{class_name}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
       end
@@ -716,6 +783,24 @@ module StaticSiteBuilder
           end
           
           require "view_component"
+          
+          # Configure ViewComponent to look for templates in the correct directories
+          # ViewComponent 4.x uses ActionView's lookup context
+          if ViewComponent.respond_to?(:view_paths=)
+            ViewComponent.view_paths = [
+              @root.join("app", "views", "pages").to_s,
+              @root.join("app", "components").to_s,
+              @root.join("app", "views").to_s
+            ]
+          elsif ViewComponent.respond_to?(:configure)
+            ViewComponent.configure do |config|
+              config.view_paths = [
+                @root.join("app", "views", "pages").to_s,
+                @root.join("app", "components").to_s,
+                @root.join("app", "views").to_s
+              ] if config.respond_to?(:view_paths=)
+            end
+          end
         rescue LoadError => e
           raise "ViewComponent gem is required but not available. Add 'gem \"view_component\"' to your Gemfile. Error: #{e.message}"
         end
