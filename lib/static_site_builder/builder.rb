@@ -652,7 +652,10 @@ module StaticSiteBuilder
 
       # Render the page component
       begin
-        page_component = component_class.new(title: view.instance_variable_get(:@title) || "Site")
+        # Only pass title if view has one set, otherwise let component use its own default
+        view_title = view.instance_variable_get(:@title)
+        component_args = view_title ? { title: view_title } : {}
+        page_component = component_class.new(**component_args)
         
         # Try to render using ViewComponent's standard rendering
         # If that fails due to template not found, render the template manually
