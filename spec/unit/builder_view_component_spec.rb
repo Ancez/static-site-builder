@@ -197,14 +197,18 @@ RSpec.describe StaticSiteBuilder::Builder do
       component_class = <<~RUBY
         # frozen_string_literal: true
 
-        class BlogIndexPageComponent < ViewComponent::Base
-          def initialize(title: "Blog")
-            @title = title
+        module BlogPage
+          module IndexPage
+            class Component < ViewComponent::Base
+              def initialize(title: "Blog")
+                @title = title
+              end
+
+              private
+
+              attr_reader :title
+            end
           end
-
-          private
-
-          attr_reader :title
         end
       RUBY
 

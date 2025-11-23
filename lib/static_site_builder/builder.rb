@@ -538,8 +538,12 @@ module StaticSiteBuilder
 
       # Load the component class
       begin
-        require component_file
-        component_class = Object.const_get(class_name)
+        # Use load instead of require to ensure file is executed (important for tests)
+        load component_file
+        # Navigate nested constants step by step to ensure proper loading
+        component_class = class_name.split("::").inject(Object) do |mod, const_name|
+          mod.const_get(const_name)
+        end
       rescue NameError, LoadError => e
         raise "Could not load ViewComponent class #{class_name} from #{component_file}: #{e.message}"
       end
