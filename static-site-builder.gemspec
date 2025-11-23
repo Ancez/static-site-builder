@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Lukasz Czapiewski"]
   spec.email         = ["luke@mmtm.io"]
 
-  spec.summary       = "Build static HTML sites with working JavaScript"
-  spec.description   = "A Ruby gem for building static HTML sites. Includes generator for creating projects and builder for compiling ERB/Phlex templates to static HTML. Choose your stack: ERB or Phlex, Importmap or ESBuild/Webpack/Vite, TailwindCSS or shadcn, Stimulus or React/Vue/Alpine."
+  spec.summary       = "Build static HTML sites from ERB/Phlex templates with working JavaScript"
+  spec.description   = "A Ruby gem for building static HTML sites from ERB or Phlex templates using ActionView. Compiles templates to static HTML with full JavaScript support. Includes a generator for creating projects and a builder for compilation. Choose your stack: ERB or Phlex templates, Importmap/ESBuild/Webpack/Vite for JavaScript, TailwindCSS or shadcn for CSS, and Stimulus/React/Vue/Alpine.js for interactivity. No backend required - deploy static HTML anywhere."
   spec.homepage      = "https://github.com/Ancez/static-site-builder"
   spec.license       = "MIT"
 
