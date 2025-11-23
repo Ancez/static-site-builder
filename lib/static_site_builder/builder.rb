@@ -708,8 +708,14 @@ module StaticSiteBuilder
             end
             
             template_content = File.read(template_file_path)
-            # Extract local variable names from instance variables for ActionView::Template
+            # Extract local variable names and values from instance variables for ActionView::Template
+            # Pass them as locals so templates can access them directly
             local_names = page_component.instance_variables.map { |ivar| ivar.to_s.delete('@').to_sym }
+            locals_hash = {}
+            page_component.instance_variables.each do |ivar|
+              local_name = ivar.to_s.delete('@').to_sym
+              locals_hash[local_name] = page_component.instance_variable_get(ivar)
+            end
             template = ActionView::Template.new(
               template_content,
               template_file_path,
@@ -718,7 +724,8 @@ module StaticSiteBuilder
               format: :html,
               locals: local_names
             )
-            page_content = view.render(template: template)
+            # Render with locals so template can access variables directly (e.g., title instead of @title)
+            page_content = view.render(template: template, locals: locals_hash)
           else
             raise e
           end
