@@ -1,0 +1,81 @@
+name: Auto-fix Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_iterations:
+        description: 'Maximum number of fix attempts'
+        required: false
+        default: '5'
+      ai_provider:
+        description: 'AI provider (openai, anthropic)'
+        required: false
+        default: 'openai'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'lib/**'
+      - 'spec/**'
+      - 'Gemfile*'
+      - '.github/workflows/auto-fix-tests.yml'
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    strategy:
+      matrix:
+        ruby-version: ['3.1', '3.2', '3.3', '3.4']
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby-version }}
+        bundler-cache: true
+    
+    - name: Install dependencies
+      run: bundle install
+    
+    - name: Install jq (for JSON parsing)
+      run: sudo apt-get update && sudo apt-get install -y jq
+    
+    - name: Configure Git
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+    
+    - name: Auto-fix failing tests
+      env:
+        AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'openai' }}
+        MAX_ITERATIONS: ${{ github.event.inputs.max_iterations || '5' }}
+        RUBY_VERSION: ${{ matrix.ruby-version }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        chmod +x .github/scripts/auto-fix-tests.sh
+        .github/scripts/auto-fix-tests.sh
+    
+    - name: Push fixes (if any)
+      if: success()
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          git push origin HEAD:${{ github.ref }} || echo "Push failed or no changes"
+        fi
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.ruby-version }}
+        path: |
+          test-results.log
+          fix-attempts.log
