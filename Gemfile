@@ -10,5 +10,4 @@ gem "base64", "~> 0.1"  # Required for Ruby 3.4+ (removed from default gems)
 group :development, :test do
   gem "rspec", "~> 3.12"
   gem "simplecov", "~> 0.22", require: false
-  gem "view_component", "~> 4.0"
 end
