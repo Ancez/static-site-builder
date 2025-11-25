@@ -11,3 +11,5 @@ group :development, :test do
   gem "rspec", "~> 3.12"
   gem "simplecov", "~> 0.22", require: false
 end
+
+gem "meta-tags", "~> 2.22"

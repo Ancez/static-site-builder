@@ -28,11 +28,11 @@ RSpec.describe StaticSiteBuilder::Builder do
     it "accepts custom options" do
       builder = described_class.new(
         root: @tmp_dir.to_s,
-        template_engine: "phlex",
+        template_engine: "erb",
         js_bundler: "esbuild"
       )
 
-      expect(builder.instance_variable_get(:@template_engine)).to eq("phlex")
+      expect(builder.instance_variable_get(:@template_engine)).to eq("erb")
       expect(builder.instance_variable_get(:@js_bundler)).to eq("esbuild")
     end
 

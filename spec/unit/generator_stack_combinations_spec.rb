@@ -31,13 +31,8 @@ RSpec.describe StaticSiteBuilder::Generator do
                 expect(app_path.join("lib/site_builder.rb")).to exist
 
                 # Verify template-specific files
-                if template == "erb"
-                  expect(app_path.join("app/views/layouts/application.html.erb")).to exist
-                  expect(app_path.join("app/views/pages/index.html.erb")).to exist
-                elsif template == "phlex"
-                  expect(app_path.join("app/views/layouts/application.rb")).to exist
-                  expect(app_path.join("app/views/pages/index.rb")).to exist
-                end
+                expect(app_path.join("app/views/layouts/application.html.erb")).to exist
+                expect(app_path.join("app/views/pages/index.html.erb")).to exist
 
                 # Verify bundler-specific configs
                 if bundler == "importmap"
@@ -84,10 +79,6 @@ RSpec.describe StaticSiteBuilder::Generator do
 
                 if bundler == "importmap"
                   expect(content).to include("importmap-rails")
-                end
-
-                if template == "phlex"
-                  expect(content).to include("phlex-rails")
                 end
               end
             end

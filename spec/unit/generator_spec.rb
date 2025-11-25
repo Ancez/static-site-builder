@@ -16,7 +16,7 @@ RSpec.describe StaticSiteBuilder::Generator do
 
     it "accepts custom options" do
       options = {
-        template_engine: "phlex",
+        template_engine: "erb",
         js_bundler: "esbuild",
         css_framework: "plain",
         js_framework: "react"
@@ -24,7 +24,7 @@ RSpec.describe StaticSiteBuilder::Generator do
 
       generator = described_class.new("test-app", options)
 
-      expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("phlex")
+      expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("erb")
       expect(generator.instance_variable_get(:@options)[:js_bundler]).to eq("esbuild")
       expect(generator.instance_variable_get(:@options)[:css_framework]).to eq("plain")
       expect(generator.instance_variable_get(:@options)[:js_framework]).to eq("react")
@@ -77,14 +77,6 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(content).to include("importmap-rails")
     end
 
-    it "includes phlex-rails in Gemfile when using phlex" do
-      generator = described_class.new(app_path.to_s, template_engine: "phlex")
-      generator.generate
-
-      gemfile = app_path.join("Gemfile")
-      content = File.read(gemfile)
-      expect(content).to include("phlex-rails")
-    end
 
     it "creates package.json when npm is needed" do
       generator = described_class.new(app_path.to_s, js_bundler: "esbuild")
@@ -164,18 +156,6 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(content).to include("<%= page_content %>")
     end
 
-    it "creates Phlex layout when using phlex" do
-      generator = described_class.new(app_path.to_s, template_engine: "phlex")
-      generator.generate
-
-      layout = app_path.join("app/views/layouts/application.rb")
-      expect(layout).to exist
-
-      content = File.read(layout)
-      expect(content).to include("ApplicationLayout")
-      expect(content).to include("Phlex::HTML")
-    end
-
     it "creates example ERB page" do
       generator = described_class.new(app_path.to_s, template_engine: "erb")
       generator.generate
@@ -185,17 +165,6 @@ RSpec.describe StaticSiteBuilder::Generator do
 
       content = File.read(page)
       expect(content).to include("Welcome")
-    end
-
-    it "creates example Phlex page" do
-      generator = described_class.new(app_path.to_s, template_engine: "phlex")
-      generator.generate
-
-      page = app_path.join("app/views/pages/index.rb")
-      expect(page).to exist
-
-      content = File.read(page)
-      expect(content).to include("IndexPage")
     end
 
     it "creates Stimulus entry when using stimulus" do

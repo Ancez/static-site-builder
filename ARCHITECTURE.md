@@ -24,14 +24,13 @@ static-site-generator/
    - Sets up build tasks
 
 2. **Builder Gem** (`static-site-builder` gem) - **Separate gem**
-   - Handles ERB/Phlex compilation
+   - Handles ERB compilation
    - Manages asset copying
    - Generates importmap JSON
    - Outputs static HTML
 
 3. **Standard Gems** - Used by generated sites
    - `importmap-rails` - Importmap support
-   - `phlex-rails` - Phlex components
    - `static-site-builder` - Core builder functionality
 
 ## Generated Site Structure

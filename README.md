@@ -24,7 +24,7 @@ Uses **ActionView** to render ERB templates - get the full flexibility of Rails 
 
 Generate static HTML pages with JavaScript files that work. Choose your own stack:
 
-- **Template Engine**: ERB or Phlex
+- **Template Engine**: ERB
 - **JavaScript Bundler**: Importmap, ESBuild, Webpack, Vite, or none
 - **CSS Framework**: TailwindCSS, shadcn/ui, or plain CSS
 - **JavaScript Framework**: Stimulus, React, Vue, Alpine.js, or vanilla JS
@@ -57,7 +57,7 @@ ruby bin/generate my-site
 
 You'll be prompted to choose your stack using an interactive menu with arrow key navigation. Generated sites use:
 - `static-site-builder` gem for compilation
-- Standard gems (importmap-rails, phlex-rails, etc.) for functionality
+- Standard gems (importmap-rails, etc.) for functionality
 - npm packages for JS bundlers and frameworks
 
 ## What Gets Generated
@@ -87,8 +87,8 @@ my-site/
 ## How It Works
 
 1. **Generator** (`static-site-generator`) - Creates the project structure
-2. **Builder Gem** (`static-site-builder`) - Handles ERB/Phlex compilation
-3. **Standard Gems** - importmap-rails, phlex-rails, etc. for functionality
+2. **Builder Gem** (`static-site-builder`) - Handles ERB compilation
+3. **Standard Gems** - importmap-rails, etc. for functionality
 4. **Build Tools** - Rake tasks that use the builder gem
 
 ## Features
@@ -97,14 +97,13 @@ my-site/
 - 🔧 **Flexible stack** - Choose what works for you
 - 📦 **Gem-based** - Uses existing Ruby gems, not custom code
 - 🚀 **Fast builds** - Compile once, deploy everywhere
-- 🎨 **Component support** - ERB or Phlex components
+- 🎨 **Component support** - ERB components and partials
 - 📱 **Modern JS** - ES modules, importmaps, or bundlers
 
 ## Supported Stacks
 
 ### Template Engines
 - **ERB** - Ruby's embedded Ruby templates
-- **Phlex** - Ruby component library (via phlex-rails gem)
 
 ### JavaScript Bundlers
 - **Importmap** - No bundling, use ES modules directly (via importmap-rails gem)
@@ -168,37 +167,6 @@ Use layouts in `app/views/layouts/application.html.erb`:
   <%= yield %>
 </body>
 </html>
-```
-
-### Using Phlex Components
-
-Create reusable components in `app/views/components/`:
-
-```ruby
-class Button < Phlex::HTML
-  def initialize(text:, href:, variant: "primary")
-    @text = text
-    @href = href
-    @variant = variant
-  end
-
-  def template
-    a(href: @href, class: "btn btn-#{@variant}") { @text }
-  end
-end
-```
-
-Use in pages:
-
-```ruby
-class HomePage < Phlex::HTML
-  def template
-    div do
-      h1 { "Welcome" }
-      render Button.new(text: "Get Started", href: "/about")
-    end
-  end
-end
 ```
 
 ### JavaScript with Importmap
@@ -269,11 +237,6 @@ static-site-builder new my-site
 # Choose: ERB, Importmap, TailwindCSS, Stimulus
 ```
 
-### Phlex + ESBuild + React + shadcn
-```bash
-static-site-builder new my-site
-# Choose: Phlex, ESBuild, shadcn/ui, React
-```
 
 ## Notable Projects
 

@@ -71,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release of static-site-builder gem
 - Generator for creating new static site projects
 - Builder for compiling ERB templates to static HTML
-- Support for multiple template engines (ERB, Phlex)
+- Support for ERB template engine
 - Support for multiple JavaScript bundlers (Importmap, ESBuild, Webpack, Vite, None)
 - Support for multiple CSS frameworks (TailwindCSS, shadcn/ui, Plain CSS)
 - Support for multiple JavaScript frameworks (Stimulus, React, Vue, Alpine.js, Vanilla)

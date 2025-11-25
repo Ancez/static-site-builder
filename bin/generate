@@ -14,7 +14,7 @@ def main
   app_name = ARGV[0]
 
   if Dir.exist?(app_name)
-    puts "Error: Directory '#{app_name}' already exists"
+    puts "Error: Directory '#{app_name}' already exists. Please choose a different name."
     exit 1
   end
 
@@ -57,7 +57,7 @@ def main
   generator = StaticSiteBuilder::Generator.new(app_name, options)
   generator.generate
 rescue Interrupt
-  puts "\n\nGeneration cancelled."
+  puts "\n\nGeneration cancelled by user."
   exit 1
 end
 

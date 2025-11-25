@@ -8,6 +8,18 @@ require "fileutils"
 require "json"
 require "pathname"
 require "digest"
+# Require meta-tags gem (handle Railtie gracefully for non-Rails usage)
+begin
+  require "meta_tags"
+rescue NameError => e
+  # If Rails::Railtie is not available, require components directly
+  if e.message.include?("Railtie")
+    require "meta_tags/meta_tags_collection"
+    require "meta_tags/view_helper"
+  else
+    raise
+  end
+end
 
 begin
   require "importmap-rails"
@@ -17,7 +29,28 @@ end
 
 module StaticSiteBuilder
   class Builder
-    def initialize(root: Dir.pwd, template_engine: "erb", js_bundler: "importmap", importmap_config: nil, annotate_template_file_names: nil)
+    # Default directory for partials when no path separator is provided
+    PARTIALS_DIR = "shared"
+    # Output directory name
+    DIST_DIR = "dist"
+    # Default JavaScript entry point
+    JS_ENTRY_POINT = "application"
+    # Template engine names
+    TEMPLATE_ERB = "erb"
+    # JavaScript bundler names
+    JS_BUNDLER_IMPORTMAP = "importmap"
+    # Common vendor file paths to check in node_modules packages
+    VENDOR_FILE_PATHS = [
+      "dist/%s.js",
+      "dist/%s.min.js",
+      "dist/index.js",
+      "%s.js",
+      "index.js",
+      "dist/%s",
+      "%s"
+    ].freeze
+
+    def initialize(root: Dir.pwd, template_engine: TEMPLATE_ERB, js_bundler: JS_BUNDLER_IMPORTMAP, importmap_config: nil, annotate_template_file_names: nil)
       @root = Pathname.new(root)
       @template_engine = template_engine
       @js_bundler = js_bundler
@@ -40,123 +73,402 @@ module StaticSiteBuilder
         SimpleImportMap.new(root: @root)
       end
 
-      load_importmap_config if @js_bundler == "importmap"
+      load_importmap_config if @js_bundler == JS_BUNDLER_IMPORTMAP
     end
 
-    # Build the static site
+    # Builds the complete static site.
     #
-    # Compiles all templates, copies assets, generates importmap (if needed),
-    # and outputs everything to the dist/ directory.
+    # Compiles ERB templates to HTML, copies JavaScript and CSS assets, generates
+    # importmap configuration (if using importmap), and outputs everything to the
+    # dist/ directory. In development mode, files are updated in place to prevent
+    # 404 errors during live reload. In production mode, the dist directory is
+    # cleaned first for a fresh build.
     #
     # @return [void]
     def build
       puts "Building static site..."
 
-      dist_dir = @root.join("dist")
+      dist_dir = @root.join(DIST_DIR)
       
-      # Only clean dist directory for production/release builds
-      # In development, update files in place to prevent 404s during rebuilds
+      # Clean dist directory only for production/release builds
+      # In development, update files in place to prevent 404s during live reload
       production_build = ENV["PRODUCTION"] == "true" || ENV["RELEASE"] == "true"
       if production_build
         if dist_dir.exist?
           puts "Cleaning dist directory for production build..."
           FileUtils.rm_rf(dist_dir)
-        else
-          puts "Dist directory does not exist, skipping clean"
         end
       end
       
       # Ensure dist directory exists
       FileUtils.mkdir_p(dist_dir)
 
-      # Copy assets (overwrites existing files)
+      # Copy JavaScript and CSS assets to dist
       copy_assets(dist_dir)
 
-      # Generate importmap JSON if using importmap (overwrites existing file)
-      generate_importmap(dist_dir) if @js_bundler == "importmap"
+      # Generate importmap JSON once if using importmap (reused for both file and templates)
+      @importmap_json_str = generate_importmap_json(dist_dir) if @js_bundler == JS_BUNDLER_IMPORTMAP
 
-      # Compile pages based on template engine (overwrites existing files)
-      case @template_engine
-      when "erb"
-        compile_erb_pages(dist_dir)
-      when "phlex"
-        compile_phlex_pages(dist_dir)
-      end
+      # Write importmap JSON file to dist/assets/ if using importmap
+      write_importmap_file(dist_dir) if @js_bundler == JS_BUNDLER_IMPORTMAP
 
-      # Copy static files (overwrites existing files)
+      # Compile ERB templates to static HTML pages
+      compile_erb_pages(dist_dir) if @template_engine == TEMPLATE_ERB
+
+      # Copy static files from public/ directory to dist
       copy_static_files(dist_dir)
 
-      # Notify WebSocket server (always update, even if file doesn't exist yet)
+      # Notify WebSocket server of rebuild for live reload
+      # Always update the reload file, even if it doesn't exist yet
       reload_file = @root.join(".reload")
-      File.write(reload_file, Time.now.to_f.to_s)
+      File.write(reload_file, Time.current.to_f.to_s)
 
       puts "\n✓ Build complete! Output in #{dist_dir}"
     end
 
-    # Public method to render partials - no longer needed as ActionView handles this directly
-    # ActionView's render method automatically finds and renders partials from app/views
-    # This method is kept for backwards compatibility but should not be called
-    def render_partial(partial_path, view_context, locals = {})
-      # ActionView handles partial rendering automatically through its render method
-      # When templates call render 'shared/header', ActionView finds _header.html.erb automatically
-      begin
-        view_context.render(partial: partial_path, locals: locals)
-      rescue ActionView::MissingTemplate => e
-        # Convert ActionView's error to our format for backwards compatibility
-        raise "Partial not found: #{partial_path} (looked for #{e.path})"
+    # Helper methods that need to be accessible from closures.
+    #
+    # These methods are public to allow access from ActionView template closures,
+    # but they are considered internal API and should not be called directly.
+
+    # Accesses hash values using either symbol or string keys.
+    #
+    # Tries each key in order until a non-nil value is found. This allows
+    # compatibility with both symbol and string keys in options hashes.
+    #
+    # @param hash [Hash] The hash to search
+    # @param keys [Array<Symbol, String>] Keys to try in order
+    # @return [Object, nil] The first non-nil value found, or nil if none found
+    def hash_value(hash, *keys)
+      keys.each do |key|
+        value = hash[key]
+        return value if value.present?
+      end
+      nil
+    end
+
+    # Determine current page path from page name
+    def determine_current_page_path(page_name)
+      if page_name == 'index.html'
+        '/'
+      else
+        "/#{page_name.gsub(/\.html$/, '')}"
       end
     end
 
-    private
+    # Load layout content, trying .html.erb first, then .html, or default layout
+    def load_layout_content
+      layout = StaticSiteBuilder::DEFAULT_LAYOUT_NAME
+      layout_file = @root.join('app', 'views', 'layouts', "#{layout}.html.erb")
+      layout_file = @root.join('app', 'views', 'layouts', "#{layout}.html") unless layout_file.exist?
+      layout_content = layout_file.exist? ? File.read(layout_file) : default_layout
+
+      # Inject live reload script if enabled and using custom layout
+      if ENV['LIVE_RELOAD'] == 'true' && layout_file.exist?
+        unless layout_content.include?('live reload') || layout_content.include?('LIVE_RELOAD')
+          script = live_reload_script
+          layout_content = layout_content.gsub(/<\/body>/, "#{script}</body>") unless script.blank?
+        end
+      end
+
+      [layout_content, layout_file]
+    end
+
+    # Setup ActionView context and create view instance
+    def setup_action_view_context
+      view_paths = ActionView::PathSet.new([@root.join('app', 'views').to_s])
+      lookup_context = ActionView::LookupContext.new(view_paths)
+      view_class = ActionView::Base.with_empty_template_cache
+      view = view_class.new(lookup_context, {}, self)
+      # Include MetaTags helper methods
+      view.extend(MetaTags::ViewHelper)
+      view
+    end
+
+    # Set instance variables on the view that will be available in templates
+    def setup_view_instance_variables(view, importmap_json_str, current_page_path)
+      view.instance_variable_set(:@js_modules, [])
+      view.instance_variable_set(:@importmap_json, importmap_json_str) if importmap_json_str
+      view.instance_variable_set(:@current_page, current_page_path)
+      view.instance_variable_set(:@page_content, nil)
+    end
+
+    # Override render method to handle 'footer' -> 'shared/footer' conversion
+    def override_view_render_method(view, importmap_json_str, current_page_path)
+      builder_self = self
+      view.define_singleton_method(:render) do |options = {}, locals = {}, &block|
+        begin
+          render_options, render_locals = builder_self.resolve_render_options(options, locals, importmap_json_str, current_page_path)
+          # Merge locals into options hash for ActionView
+          final_options = render_options.merge(locals: render_locals)
+          super(final_options, {}, &block)
+        rescue ActionView::MissingTemplate => e
+          partial_name = builder_self.extract_partial_name(options)
+          raise "Partial template not found: '#{partial_name.presence || 'unknown'}'. Searched in: #{e.path}"
+        end
+      end
+    end
+
+    # Extract partial name from options for error messages
+    def extract_partial_name(options)
+      if options.is_a?(Hash)
+        hash_value(options, :partial, 'partial') || 'unknown'
+      else
+        options.to_s
+      end
+    end
+
+    # Resolve render options and locals, handling partial path normalization
+    def resolve_render_options(options, locals, importmap_json_str, current_page_path)
+      if options.is_a?(String) || options.is_a?(Symbol)
+        partial_name = normalize_partial_path(options.to_s)
+        merged_locals = merge_page_locals(locals, importmap_json_str, current_page_path)
+        [{ partial: partial_name }, merged_locals]
+      elsif options.is_a?(Hash)
+        partial_path = hash_value(options, :partial, 'partial')
+        if partial_path
+          normalized_path = normalize_partial_path(partial_path.to_s)
+          provided_locals = hash_value(options, :locals, 'locals').presence || locals.presence || {}
+          merged_locals = merge_page_locals(provided_locals, importmap_json_str, current_page_path)
+          # Remove :partial and :locals from options to avoid conflicts
+          clean_options = options.reject { |k, _| [:partial, 'partial', :locals, 'locals'].include?(k) }
+          [{ partial: normalized_path }.merge(clean_options), merged_locals]
+        else
+          merged_locals = merge_page_locals(locals, importmap_json_str, current_page_path)
+          [options, merged_locals]
+        end
+      else
+        [options, locals]
+      end
+    end
+
+    # Render page template using ActionView
+    def render_page_template(view, content, page_name, importmap_json_str, current_page_path, erb_file)
+      page_template = ActionView::Template.new(
+        content,
+        'inline:page',
+        ActionView::Template::Handlers::ERB.new,
+        virtual_path: "pages/#{page_name.gsub(/\.html$/, '')}",
+        format: :html,
+        locals: [:importmap_json, :current_page]
+      )
+
+      begin
+        page_content = view.render(template: page_template, locals: {
+          importmap_json: importmap_json_str,
+          current_page: current_page_path
+        })
+      rescue ActionView::Template::Error => e
+        if e.cause.is_a?(ActionView::MissingTemplate)
+          raise "Partial template not found. Searched in: #{e.cause.path}"
+        end
+        raise
+      end
+
+      if @annotate_template_file_names
+        relative_template_path = Pathname.new(erb_file).relative_path_from(@root)
+        page_content = annotate_template(page_content, relative_template_path.to_s)
+      end
+
+      page_content
+    end
+
+    # Render layout template using ActionView
+    def render_layout_template(view, layout_content, layout_file, page_content, importmap_json_str, current_page_path)
+      layout = StaticSiteBuilder::DEFAULT_LAYOUT_NAME
+      layout_template = ActionView::Template.new(
+        layout_content,
+        'inline:layout',
+        ActionView::Template::Handlers::ERB.new,
+        virtual_path: "layouts/#{layout}",
+        format: :html,
+        locals: [:page_content, :importmap_json, :current_page]
+      )
+
+      safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
+      
+      rendered = view.render(template: layout_template, locals: {
+        page_content: safe_page_content,
+        importmap_json: importmap_json_str,
+        current_page: current_page_path
+      })
+
+      if @annotate_template_file_names && layout_file.exist?
+        relative_layout_path = Pathname.new(layout_file).relative_path_from(@root)
+        begin_comment = "<!-- BEGIN #{relative_layout_path} -->"
+        end_comment = "<!-- END #{relative_layout_path} -->"
+        rendered = "#{begin_comment}\n#{rendered}\n#{end_comment}"
+      end
+
+      rendered
+    end
+
+    # Write final rendered output to file
+    def write_page_output(dist_dir, page_name, rendered)
+      output_path = dist_dir.join(page_name)
+      FileUtils.mkdir_p(output_path.dirname)
+      File.write(output_path, rendered)
+    end
+
+    # Load PageHelpers module and set metadata from PageHelpers::PAGES using meta-tags
+    # This ensures partials rendered within the page have access to metadata
+    def load_page_helpers_and_set_metadata(view, current_page_path)
+      # Only require once (first time)
+      unless defined?(@page_helpers_loaded)
+        begin
+          page_helpers_path = @root.join('lib', 'page_helpers.rb')
+          if page_helpers_path.exist?
+            require page_helpers_path.to_s
+            @page_helpers_loaded = true
+          end
+        rescue LoadError
+          # PageHelpers not available, continue without it
+        end
+      end
+
+      # Extend view with PageHelpers if available
+      if defined?(PageHelpers)
+        view.extend(PageHelpers) unless view.singleton_class.included_modules.include?(PageHelpers)
+      end
+
+      # Set meta tags from PageHelpers::PAGES using meta-tags gem
+      begin
+        if defined?(PageHelpers) && PageHelpers.const_defined?(:PAGES)
+          pages = PageHelpers::PAGES
+          if pages.is_a?(Hash) && pages.key?(current_page_path)
+            metadata = pages[current_page_path]
+            meta_tags_hash = {}
+            
+            # Map PageHelpers metadata to meta-tags format
+            meta_tags_hash[:title] = metadata[:title] if metadata[:title].present?
+            meta_tags_hash[:description] = metadata[:description] if metadata[:description].present?
+            meta_tags_hash[:canonical] = metadata[:url] if metadata[:url].present?
+            
+            # Open Graph tags
+            if metadata[:image].present? || metadata[:title].present? || metadata[:url].present?
+              meta_tags_hash[:og] = {}
+              meta_tags_hash[:og][:title] = metadata[:title] if metadata[:title].present?
+              meta_tags_hash[:og][:description] = metadata[:description] if metadata[:description].present?
+              meta_tags_hash[:og][:url] = metadata[:url] if metadata[:url].present?
+              meta_tags_hash[:og][:image] = metadata[:image] if metadata[:image].present?
+            end
+            
+            # Twitter Card tags
+            if metadata[:image].present? || metadata[:title].present?
+              meta_tags_hash[:twitter] = {}
+              meta_tags_hash[:twitter][:card] = 'summary_large_image' if metadata[:image].present?
+              meta_tags_hash[:twitter][:title] = metadata[:title] if metadata[:title].present?
+              meta_tags_hash[:twitter][:description] = metadata[:description] if metadata[:description].present?
+              meta_tags_hash[:twitter][:image] = metadata[:image] if metadata[:image].present?
+            end
+            
+            view.set_meta_tags(meta_tags_hash) if meta_tags_hash.present?
+          end
+        end
+      rescue NameError, TypeError, NoMethodError => e
+        # PageHelpers metadata loading failed, continue without it
+        # This is non-fatal - pages can still be rendered without metadata
+        # Log silently as this is expected in some scenarios
+      end
+    end
+
+    # Normalize partial path by adding PARTIALS_DIR prefix if no path separator exists
+    def normalize_partial_path(partial_name)
+      if partial_name.include?('/')
+        partial_name
+      else
+        "#{PARTIALS_DIR}/#{partial_name}"
+      end
+    end
+
+    # Merge page-level locals (importmap_json, current_page) with provided locals
+    def merge_page_locals(locals, importmap_json_str, current_page_path)
+      {
+        importmap_json: importmap_json_str,
+        current_page: current_page_path
+      }.merge(locals.is_a?(Hash) ? locals : {})
+    end
+
+    # Generate live reload WebSocket script if live reload is enabled
+    def live_reload_script
+      if ENV["LIVE_RELOAD"] == "true"
+        ws_port = ENV["WS_PORT"] || StaticSiteBuilder::DEFAULT_WS_PORT
+        <<~HTML
+          <script>
+            (function() {
+              function connect() {
+                var ws = new WebSocket('ws://localhost:#{ws_port}');
+                ws.onmessage = function(e) {
+                  if (e.data === 'reload') window.location.reload();
+                };
+                ws.onclose = function() { setTimeout(connect, 1000); };
+                ws.onerror = function() {};
+              }
+              connect();
+            })();
+          </script>
+        HTML
+      else
+        ""
+      end
+    end
 
     def load_importmap_config
       return unless @importmap_config_path.exist?
 
-      config_content = File.read(@importmap_config_path)
-      # Replace relative paths with absolute paths
-      config_content = config_content.gsub(/"app\//, %("#{@root.join("app").to_s}/))
-      config_content = config_content.gsub(/"vendor\//, %("#{@root.join("vendor").to_s}/))
+      begin
+        config_content = File.read(@importmap_config_path)
+        # Replace relative paths with absolute paths
+        config_content = config_content.gsub(/"app\//, %("#{@root.join("app").to_s}/))
+        config_content = config_content.gsub(/"vendor\//, %("#{@root.join("vendor").to_s}/))
 
-      # Replace File.expand_path calls with actual paths
-      config_content = config_content.gsub(/File\.expand_path\(["'](.*?)["'], __dir__\)/) do |match|
-        path = $1
-        @root.join("config", path).expand_path.to_s.inspect
+        # Replace File.expand_path calls with actual paths
+        config_content = config_content.gsub(/File\.expand_path\(["'](.*?)["'], __dir__\)/) do |match|
+          path = $1
+          @root.join("config", path).expand_path.to_s.inspect
+        end
+
+        @importmap.instance_eval(config_content, @importmap_config_path.to_s)
+      rescue Errno::ENOENT, Errno::EACCES, SystemCallError => e
+        puts "Warning: Could not load importmap config from #{@importmap_config_path}: #{e.message}"
+      rescue SyntaxError, StandardError => e
+        puts "Error: Invalid importmap config syntax in #{@importmap_config_path}: #{e.message}"
+        raise
       end
-
-      @importmap.instance_eval(config_content, @importmap_config_path.to_s)
     end
 
     def copy_assets(dist_dir)
       puts "Copying assets..."
 
-      # Copy JavaScript files
+      # Copy JavaScript files from app/javascript to dist/assets/javascripts
       js_dir = @root.join("app", "javascript")
       if js_dir.exist? && js_dir.directory?
         dist_js = dist_dir.join("assets", "javascripts")
         FileUtils.mkdir_p(dist_js)
-        # Copy all files and subdirectories from js_dir to dist_js
+        # Copy all files and subdirectories recursively
         Dir.glob(js_dir.join("*")).each do |item|
           FileUtils.cp_r(item, dist_js, preserve: true)
         end
       end
 
-      # Copy vendor JavaScript files directly from node_modules to dist (for importmap)
-      if @js_bundler == "importmap"
+      # Copy vendor JavaScript files from node_modules to dist (for importmap)
+      # These are packages like @hotwired/stimulus that are referenced in importmap config
+      if @js_bundler == JS_BUNDLER_IMPORTMAP
         copy_vendor_files_from_node_modules(dist_dir)
       end
 
-      # Copy CSS (skip if Tailwind is handling it - check for tailwind.config.js)
-      # Tailwind outputs directly to dist, so we don't want to overwrite with raw files
-      # But we still need to ensure the directory exists for Tailwind to write to
+      # Handle CSS files
+      # If Tailwind is configured, it outputs directly to dist, so we only ensure
+      # the directory exists. Otherwise, copy CSS files from app/assets/stylesheets.
       tailwind_config = @root.join("tailwind.config.js")
       css_dir = @root.join("app", "assets", "stylesheets")
       dist_css = dist_dir.join("assets", "stylesheets")
       
       if tailwind_config.exist?
-        # Tailwind is handling CSS - ensure directory exists but don't copy raw files
+        # Tailwind handles CSS compilation - just ensure output directory exists
         FileUtils.mkdir_p(dist_css)
       elsif css_dir.exist? && css_dir.directory?
-        # No Tailwind - copy CSS files normally
+        # No Tailwind - copy CSS files directly
         FileUtils.mkdir_p(dist_css)
         Dir.glob(css_dir.join("*")).each do |item|
           FileUtils.cp_r(item, dist_css, preserve: true)
@@ -183,14 +495,14 @@ module StaticSiteBuilder
         next unless package_name.include?("/") || package_name.start_with?("@")
 
         dest_file = dist_js.join(file_name)
-        next if dest_file.exist?
+        # Always copy/overwrite vendor files to ensure they're up to date
 
         # Try to copy directly from node_modules to dist
         if copy_vendor_file_from_node_modules(package_name, file_name, dest_file)
           puts "  ✓ Copied #{file_name} from #{package_name}"
         else
-          puts "  ⚠️  Warning: Could not find #{file_name} for #{package_name} in node_modules"
-          puts "     Ensure 'npm install' has been run and the package is installed."
+          puts "  ⚠️  Warning: Could not find #{file_name} for package #{package_name} in node_modules"
+          puts "     Make sure you've run 'npm install' and the package is installed."
         end
       end
     end
@@ -202,51 +514,69 @@ module StaticSiteBuilder
       package_dir = node_modules.join(*package_name.split("/"))
       return false unless package_dir.exist?
 
-      # Try common source paths for the package
-      # Extract base name from file_name (e.g., "stimulus.min.js" -> "stimulus")
-      base_name = file_name.gsub(/\.(min\.)?js$/, "")
-      source_paths = [
-        "dist/#{base_name}.js",
-        "dist/#{base_name}.min.js",
-        "dist/index.js",
-        "#{base_name}.js",
-        "index.js",
-        "dist/#{file_name}",
-        file_name
-      ]
-
-      source_paths.each do |source_path|
-        source_file = package_dir.join(*source_path.split("/"))
-        if source_file.exist? && source_file.file?
-          FileUtils.cp(source_file, dest_file)
-          return true
-        end
+      source_file = find_vendor_file_in_package(package_dir, file_name)
+      if source_file&.exist? && source_file.file?
+        FileUtils.cp(source_file, dest_file)
+        true
+      else
+        false
       end
-
-      false
     end
 
-    def generate_importmap(dist_dir)
-      return unless defined?(@importmap) && @importmap
+    # Find vendor file in package directory using common path patterns
+    def find_vendor_file_in_package(package_dir, file_name)
+      base_name = extract_base_name(file_name)
+      candidate_paths = generate_vendor_file_paths(base_name, file_name)
+
+      candidate_paths.each do |source_path|
+        source_file = package_dir.join(*source_path.split("/"))
+        return source_file if source_file.exist? && source_file.file?
+      end
+      nil
+    end
+
+    # Extract base name from file (e.g., "stimulus.min.js" -> "stimulus")
+    def extract_base_name(file_name)
+      file_name.gsub(/\.(min\.)?js$/, "")
+    end
+
+    # Generate candidate paths for vendor file lookup
+    def generate_vendor_file_paths(base_name, file_name)
+      paths = VENDOR_FILE_PATHS.map do |pattern|
+        if pattern.include?("%s")
+          pattern % base_name
+        else
+          pattern
+        end
+      end
+      paths.uniq.concat([file_name])
+    end
+
+    def generate_importmap_json(dist_dir)
+      return nil unless defined?(@importmap) && @importmap
 
       puts "Generating importmap..."
 
       # Create a simple resolver for asset paths
       resolver = AssetResolver.new(@root, dist_dir)
 
-      importmap_json = @importmap.to_json(resolver: resolver)
+      @importmap.to_json(resolver: resolver)
+    end
+
+    def write_importmap_file(dist_dir)
+      return unless @importmap_json_str.present?
 
       FileUtils.mkdir_p(dist_dir.join("assets"))
-      File.write(dist_dir.join("assets", "importmap.json"), JSON.pretty_generate(JSON.parse(importmap_json)))
+      parsed_json = JSON.parse(@importmap_json_str)
+      File.write(dist_dir.join("assets", "importmap.json"), JSON.pretty_generate(parsed_json))
     end
 
     def compile_erb_pages(dist_dir)
       pages_dir = @root.join("app", "views", "pages")
       return unless pages_dir.exist?
 
-      # Generate importmap JSON once for all pages
-      resolver = AssetResolver.new(@root, dist_dir)
-      importmap_json_str = @importmap.to_json(resolver: resolver) if defined?(@importmap) && @importmap
+      # Use pre-generated importmap JSON (generated once in build method)
+      importmap_json_str = @importmap_json_str
 
       # Find all ERB files, including nested directories
       Dir.glob(pages_dir.join("**", "*.html.erb")).each do |erb_file|
@@ -258,232 +588,37 @@ module StaticSiteBuilder
     end
 
     def compile_erb_page(erb_file, page_name, dist_dir, importmap_json_str)
-      puts "Compiling #{page_name}..."
+      puts "Compiling page: #{page_name}..."
 
-      # Read ERB content - ActionView will process it directly
-      content = File.read(erb_file)
-
-      # Default layout
-      layout = "application"
-
-      # Load layout - try .html.erb first, then .html
-      layout_file = @root.join("app", "views", "layouts", "#{layout}.html.erb")
-      layout_file = @root.join("app", "views", "layouts", "#{layout}.html") unless layout_file.exist?
-      layout_content = layout_file.exist? ? File.read(layout_file) : default_layout
-
-      # Inject live reload script if enabled and using custom layout
-      if ENV["LIVE_RELOAD"] == "true" && layout_file.exist?
-        # Inject live reload into custom layouts too
-        unless layout_content.include?("live reload") || layout_content.include?("LIVE_RELOAD")
-          ws_port = ENV["WS_PORT"] || 3001
-          live_reload_script = <<~HTML
-            <script>
-              (function() {
-                function connect() {
-                  var ws = new WebSocket('ws://localhost:#{ws_port}');
-                  ws.onmessage = function(e) {
-                    if (e.data === 'reload') window.location.reload();
-                  };
-                  ws.onclose = function() { setTimeout(connect, 1000); };
-                  ws.onerror = function() {};
-                }
-                connect();
-              })();
-            </script>
-          HTML
-          layout_content = layout_content.gsub(/<\/body>/, "#{live_reload_script}</body>")
-        end
-      end
-
-      # Set current_page based on the file being compiled
-      current_page_path = if page_name == 'index.html'
-        '/'
-      else
-        "/#{page_name.gsub(/\.html$/, '')}"
-      end
-
-      # Create ActionView lookup context with view paths
-      view_paths = ActionView::PathSet.new([@root.join("app", "views").to_s])
-      lookup_context = ActionView::LookupContext.new(view_paths)
-      
-      # Create ActionView::Base instance for rendering using with_empty_template_cache
-      # This is the recommended way for standalone ActionView usage
-      view_class = ActionView::Base.with_empty_template_cache
-      view = view_class.new(lookup_context, {}, self)
-
-      # Include PageHelpers if available (look in project root)
-      # Only require once (first time)
-      unless defined?(@page_helpers_loaded)
-        begin
-          page_helpers_path = @root.join('lib', 'page_helpers.rb')
-          if page_helpers_path.exist?
-            require page_helpers_path.to_s
-            @page_helpers_loaded = true
-          end
-        rescue LoadError
-          # PageHelpers not available, continue without it
-        end
-      end
-      
-      # Extend view with PageHelpers if available
-      if defined?(PageHelpers)
-        view.extend(PageHelpers) unless view.singleton_class.included_modules.include?(PageHelpers)
-      end
-
-      # Set instance variables that will be available in templates
-      # Pages can set @title, @js_modules, etc. via ERB at the top
-      view.instance_variable_set(:@js_modules, [])
-      view.instance_variable_set(:@importmap_json, importmap_json_str) if importmap_json_str
-      view.instance_variable_set(:@current_page, current_page_path)
-      view.instance_variable_set(:@page_content, nil)
-      
-      # Set title and metadata from PageHelpers BEFORE rendering page content
-      # This ensures partials rendered within the page have access to metadata
-      page_helpers_path = @root.join('lib', 'page_helpers.rb')
       begin
-        if page_helpers_path.exist?
-          require page_helpers_path.to_s
-          pages = ::PageHelpers::PAGES rescue nil
-          if pages && pages.is_a?(Hash) && pages.key?(current_page_path)
-            metadata = pages[current_page_path]
-            view.instance_variable_set(:@title, metadata[:title])
-            view.instance_variable_set(:@description, metadata[:description])
-            view.instance_variable_set(:@url, metadata[:url])
-            view.instance_variable_set(:@image, metadata[:image])
-          end
-        end
-      rescue => e
-        # Silently continue if PageHelpers can't be loaded
-      end
-      
-      # Override render to handle 'footer' -> 'shared/footer' conversion
-      # and ensure locals are passed to partials
-      view.define_singleton_method(:render) do |options = {}, locals = {}, &block|
-        begin
-          # Handle string/symbol partial names: render 'footer' -> render 'shared/footer'
-          if options.is_a?(String) || options.is_a?(Symbol)
-            partial_name = options.to_s
-            # If no path separator, assume it's in shared/
-            unless partial_name.include?('/')
-              partial_name = "shared/#{partial_name}"
-            end
-            # Merge page locals with any provided locals
-            merged_locals = {
-              importmap_json: importmap_json_str,
-              current_page: current_page_path
-            }.merge(locals.is_a?(Hash) ? locals : {})
-            super(partial: partial_name, locals: merged_locals, &block)
-          elsif options.is_a?(Hash)
-            # Handle hash options: render partial: 'footer', locals: {}
-            partial_path = options[:partial] || options['partial']
-            if partial_path
-              # Convert 'footer' to 'shared/footer' if no path
-              unless partial_path.to_s.include?('/')
-                partial_path = "shared/#{partial_path}"
-              end
-              # Merge page locals with provided locals
-              provided_locals = options[:locals] || options['locals'] || {}
-              merged_locals = {
-                importmap_json: importmap_json_str,
-                current_page: current_page_path
-              }.merge(provided_locals)
-              super(partial: partial_path, locals: merged_locals, &block)
-            else
-              # Other render options (template, etc.)
-              super(options, locals, &block)
-            end
-          else
-            super(options, locals, &block)
-          end
-        rescue ActionView::MissingTemplate => e
-          # Convert ActionView's error to our format for backwards compatibility
-          raise "Partial not found: #{partial_path || partial_name || 'unknown'} (looked for #{e.path})"
-        end
-      end
-
-      # Render page content using ActionView
-      # Pages can set instance variables via ERB (e.g., <% @title = '...' %>)
-      page_template = ActionView::Template.new(
-        content,
-        "inline:page",
-        ActionView::Template::Handlers::ERB.new,
-        virtual_path: "pages/#{page_name.gsub(/\.html$/, '')}",
-        format: :html,
-        locals: [:importmap_json, :current_page]
-      )
-      
-      begin
-        page_content = view.render(template: page_template, locals: {
-          importmap_json: importmap_json_str,
-          current_page: current_page_path
-        })
-      rescue ActionView::Template::Error => e
-        # Convert ActionView errors to our format
-        if e.cause.is_a?(ActionView::MissingTemplate)
-          raise "Partial not found: #{e.cause.path} (looked for #{e.cause.path})"
-        end
+        content = File.read(erb_file)
+      rescue Errno::ENOENT, Errno::EACCES, SystemCallError => e
+        puts "Error: Could not read ERB file #{erb_file}: #{e.message}"
         raise
       end
 
-      # Annotate page content if enabled
-      if @annotate_template_file_names
-        relative_template_path = Pathname.new(erb_file).relative_path_from(@root)
-        page_content = annotate_template(page_content, relative_template_path.to_s)
-      end
-
-      # Render layout using ActionView
-      # Instance variables set in the page template are available in the layout
-      layout_template = ActionView::Template.new(
-        layout_content,
-        "inline:layout",
-        ActionView::Template::Handlers::ERB.new,
-        virtual_path: "layouts/#{layout}",
-        format: :html,
-        locals: [:page_content, :importmap_json, :current_page]
-      )
-
-      # Mark page_content as HTML safe to prevent escaping
-      # ActionView will escape strings by default in ERB, so we mark it as safe
-      safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
+      current_page_path = determine_current_page_path(page_name)
+      layout_content, layout_file = load_layout_content
+      view = setup_action_view_context
       
-      rendered = view.render(template: layout_template, locals: {
-        page_content: safe_page_content,
-        importmap_json: importmap_json_str,
-        current_page: current_page_path
-      })
-
-      # Annotate layout if enabled
-      # Note: We wrap the rendered content without removing existing annotations
-      # This preserves page annotations that are already in the content
-      if @annotate_template_file_names && layout_file.exist?
-        relative_layout_path = Pathname.new(layout_file).relative_path_from(@root)
-        begin_comment = "<!-- BEGIN #{relative_layout_path} -->"
-        end_comment = "<!-- END #{relative_layout_path} -->"
-        rendered = "#{begin_comment}\n#{rendered}\n#{end_comment}"
-      end
-
-      output_path = dist_dir.join(page_name)
-      FileUtils.mkdir_p(output_path.dirname)
-      puts "  Debug: Writing #{rendered.length} chars to #{output_path}"
-      File.write(output_path, rendered)
-
+      load_page_helpers_and_set_metadata(view, current_page_path)
+      setup_view_instance_variables(view, importmap_json_str, current_page_path)
+      override_view_render_method(view, importmap_json_str, current_page_path)
+      
+      page_content = render_page_template(view, content, page_name, importmap_json_str, current_page_path, erb_file)
+      rendered = render_layout_template(view, layout_content, layout_file, page_content, importmap_json_str, current_page_path)
+      
+      write_page_output(dist_dir, page_name, rendered)
+      
       puts "  ✓ Created #{page_name}"
     end
 
-    def compile_phlex_pages(dist_dir)
-      # Phlex compilation will be implemented when phlex-rails is available
-      pages_dir = @root.join("app", "views", "pages")
-      return unless pages_dir.exist?
-
-      puts "Phlex compilation not yet implemented"
-      # TODO: Implement Phlex page compilation
-    end
 
     def copy_static_files(dist_dir)
       public_dir = @root.join("public")
       return unless public_dir.exist? && public_dir.directory?
 
-      puts "Copying public files..."
+      puts "Copying static files from public/..."
       # Copy all files and subdirectories from public to dist
       Dir.glob(public_dir.join("*")).each do |item|
         FileUtils.cp_r(item, dist_dir, preserve: true)
@@ -503,26 +638,7 @@ module StaticSiteBuilder
     end
 
     def default_layout
-      live_reload_script = if ENV["LIVE_RELOAD"] == "true"
-        ws_port = ENV["WS_PORT"] || 3001
-        <<~HTML
-          <script>
-            (function() {
-              function connect() {
-                var ws = new WebSocket('ws://localhost:#{ws_port}');
-                ws.onmessage = function(e) {
-                  if (e.data === 'reload') window.location.reload();
-                };
-                ws.onclose = function() { setTimeout(connect, 1000); };
-                ws.onerror = function() {};
-              }
-              connect();
-            })();
-          </script>
-        HTML
-      else
-        ""
-      end
+      live_reload_script_content = live_reload_script
 
       <<~HTML
         <!DOCTYPE html>
@@ -530,7 +646,7 @@ module StaticSiteBuilder
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title><%= @title || 'Site' %></title>
+          <%= display_meta_tags site: 'Site', title: 'Site' %>
           <link rel="stylesheet" href="/assets/stylesheets/application.css">
         </head>
         <body>
@@ -538,14 +654,14 @@ module StaticSiteBuilder
           <% if defined?(@importmap_json) && @importmap_json %>
             <script type="importmap"><%= @importmap_json %></script>
           <% end %>
-          <% if @js_modules && !@js_modules.empty? %>
+          <% if @js_modules.present? %>
             <% @js_modules.each do |module_name| %>
               <script type="module">import "<%= module_name %>";</script>
             <% end %>
           <% else %>
             <script type="module">import "application";</script>
           <% end %>
-          #{live_reload_script}
+          #{live_reload_script_content}
         </body>
         </html>
       HTML
@@ -576,7 +692,7 @@ module StaticSiteBuilder
 
       def pin(name, to: nil, preload: true)
         # If 'to' is provided, use it as-is. Otherwise, default to name.js
-        to_path = to || "#{name}.js"
+        to_path = to.presence || "#{name}.js"
         @pins[name] = { to: to_path, preload: preload }
       end
 
