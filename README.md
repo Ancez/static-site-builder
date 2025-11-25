@@ -133,7 +133,25 @@ ERB templates use **ActionView** - partials, layouts, helpers, and all Rails vie
 ```erb
 <h1><%= @title %></h1>
 <p><%= @description %></p>
-<%= render 'shared/footer' %>
+<%= render 'shared/card', locals: { title: 'Card Title', content: 'Card content' } %>
+```
+
+Layout elements like header and footer belong in `app/views/layouts/application.html.erb`:
+
+```erb
+<!DOCTYPE html>
+<html>
+<head>
+  <%= display_meta_tags site: 'Site', title: 'Site' %>
+</head>
+<body>
+  <%= render 'shared/header' %>
+  <main>
+    <%= page_content %>
+  </main>
+  <%= render 'shared/footer' %>
+</body>
+</html>
 ```
 
 Page metadata is automatically configured in `lib/page_helpers.rb` (generated automatically):

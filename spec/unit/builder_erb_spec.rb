@@ -151,16 +151,16 @@ RSpec.describe StaticSiteBuilder::Builder do
     end
 
     it "renders partials using render helper" do
-      # Create a partial
+      # Create a partial for reusable content (not layout elements)
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
-      File.write(shared_dir.join("_header.html.erb"), "<header>Header Content</header>")
+      File.write(shared_dir.join("_card.html.erb"), "<div class='card'><%= content %></div>")
       
       # Create a page that uses the partial
       page_content = <<~ERB
         <div>
-          <%= render 'shared/header' %>
           <main>Page Content</main>
+          <%= render partial: 'shared/card', locals: { content: 'Card Content' } %>
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
@@ -173,21 +173,21 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(output).to exist
 
       content = File.read(output)
-      expect(content).to include("<header>Header Content</header>")
+      expect(content).to include("<div class='card'>Card Content</div>")
       expect(content).to include("<main>Page Content</main>")
     end
 
-    it "renders partials from default shared directory" do
-      # Create a partial in shared directory
+    it "renders partials from shared directory with explicit path" do
+      # Create a partial for reusable content
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
-      File.write(shared_dir.join("_footer.html.erb"), "<footer>Footer Content</footer>")
+      File.write(shared_dir.join("_button.html.erb"), "<button class='btn'><%= text %></button>")
       
-      # Create a page that uses the partial without 'shared/' prefix
+      # Create a page that uses the partial with explicit 'shared/' path
       page_content = <<~ERB
         <div>
           <main>Page Content</main>
-          <%= render 'footer' %>
+          <%= render partial: 'shared/button', locals: { text: 'Click Me' } %>
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
@@ -198,7 +198,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
       output = site_root.join("dist/index.html")
       content = File.read(output)
-      expect(content).to include("<footer>Footer Content</footer>")
+      expect(content).to include("<button class='btn'>Click Me</button>")
     end
 
     it "raises error when partial is not found" do
@@ -212,7 +212,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
       builder = described_class.new(root: site_root.to_s, js_bundler: "none")
       
-      expect { builder.build }.to raise_error(/Partial not found/)
+      expect { builder.build }.to raise_error(/Partial template not found/)
     end
 
     it "renders partials with access to page variables" do
@@ -283,11 +283,11 @@ RSpec.describe StaticSiteBuilder::Builder do
     it "supports Rails-style render partial: syntax" do
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
-      File.write(shared_dir.join("_header.html.erb"), "<header>Header Content</header>")
+      File.write(shared_dir.join("_alert.html.erb"), "<div class='alert'><%= message %></div>")
       
       page_content = <<~ERB
         <div>
-          <%= render partial: 'shared/header' %>
+          <%= render partial: 'shared/alert', locals: { message: 'Success!' } %>
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
@@ -298,7 +298,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
       output = site_root.join("dist/index.html")
       content = File.read(output)
-      expect(content).to include("<header>Header Content</header>")
+      expect(content).to include("<div class='alert'>Success!</div>")
     end
 
     it "supports render partial: with locals" do
@@ -325,14 +325,14 @@ RSpec.describe StaticSiteBuilder::Builder do
     it "renders multiple partials on the same page" do
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
-      File.write(shared_dir.join("_header.html.erb"), "<header>Header</header>")
-      File.write(shared_dir.join("_footer.html.erb"), "<footer>Footer</footer>")
+      File.write(shared_dir.join("_card.html.erb"), "<div class='card'><%= title %></div>")
+      File.write(shared_dir.join("_badge.html.erb"), "<span class='badge'><%= text %></span>")
       
       page_content = <<~ERB
         <div>
-          <%= render 'shared/header' %>
+          <%= render partial: 'shared/card', locals: { title: 'Card Title' } %>
           <main>Content</main>
-          <%= render partial: 'shared/footer' %>
+          <%= render partial: 'shared/badge', locals: { text: 'New' } %>
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
@@ -343,9 +343,51 @@ RSpec.describe StaticSiteBuilder::Builder do
 
       output = site_root.join("dist/index.html")
       content = File.read(output)
-      expect(content).to include("<header>Header</header>")
+      expect(content).to include("<div class='card'>Card Title</div>")
       expect(content).to include("<main>Content</main>")
-      expect(content).to include("<footer>Footer</footer>")
+      expect(content).to include("<span class='badge'>New</span>")
+    end
+
+    it "renders header and footer in layout, not in pages" do
+      # Create header and footer partials
+      shared_dir = site_root.join("app/views/shared")
+      FileUtils.mkdir_p(shared_dir)
+      File.write(shared_dir.join("_header.html.erb"), "<header>Site Header</header>")
+      File.write(shared_dir.join("_footer.html.erb"), "<footer>Site Footer</footer>")
+      
+      # Page should only contain content, not layout elements
+      page_content = <<~ERB
+        <main>
+          <h1>Page Title</h1>
+          <p>Page content goes here</p>
+        </main>
+      ERB
+      create_test_page(site_root.to_s, "index.html.erb", page_content)
+      
+      # Layout should contain header and footer
+      layout_content = <<~ERB
+        <html>
+        <body>
+          <%= render 'shared/header' %>
+          <%= page_content %>
+          <%= render 'shared/footer' %>
+        </body>
+        </html>
+      ERB
+      create_test_layout(site_root.to_s, "application.html.erb", layout_content)
+
+      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder.build
+
+      output = site_root.join("dist/index.html")
+      content = File.read(output)
+      
+      # Header and footer should be in the output (from layout)
+      expect(content).to include("<header>Site Header</header>")
+      expect(content).to include("<footer>Site Footer</footer>")
+      # Page content should be between them
+      expect(content).to include("<h1>Page Title</h1>")
+      expect(content).to include("<p>Page content goes here</p>")
     end
   end
 end

@@ -29,8 +29,6 @@ end
 
 module StaticSiteBuilder
   class Builder
-    # Default directory for partials when no path separator is provided
-    PARTIALS_DIR = "shared"
     # Output directory name
     DIST_DIR = "dist"
     # Default JavaScript entry point
@@ -175,13 +173,19 @@ module StaticSiteBuilder
     end
 
     # Setup ActionView context and create view instance
+    #
+    # Creates an ActionView::Base instance with helpers included (Rails pattern).
+    # Helpers are included on the class before instantiation, which is more
+    # Rails-like than extending individual instances.
     def setup_action_view_context
       view_paths = ActionView::PathSet.new([@root.join('app', 'views').to_s])
       lookup_context = ActionView::LookupContext.new(view_paths)
       view_class = ActionView::Base.with_empty_template_cache
+      
+      # Include helpers on the class (Rails pattern) rather than extending instances
+      view_class.include(MetaTags::ViewHelper) unless view_class.included_modules.include?(MetaTags::ViewHelper)
+      
       view = view_class.new(lookup_context, {}, self)
-      # Include MetaTags helper methods
-      view.extend(MetaTags::ViewHelper)
       view
     end
 
@@ -193,54 +197,6 @@ module StaticSiteBuilder
       view.instance_variable_set(:@page_content, nil)
     end
 
-    # Override render method to handle 'footer' -> 'shared/footer' conversion
-    def override_view_render_method(view, importmap_json_str, current_page_path)
-      builder_self = self
-      view.define_singleton_method(:render) do |options = {}, locals = {}, &block|
-        begin
-          render_options, render_locals = builder_self.resolve_render_options(options, locals, importmap_json_str, current_page_path)
-          # Merge locals into options hash for ActionView
-          final_options = render_options.merge(locals: render_locals)
-          super(final_options, {}, &block)
-        rescue ActionView::MissingTemplate => e
-          partial_name = builder_self.extract_partial_name(options)
-          raise "Partial template not found: '#{partial_name.presence || 'unknown'}'. Searched in: #{e.path}"
-        end
-      end
-    end
-
-    # Extract partial name from options for error messages
-    def extract_partial_name(options)
-      if options.is_a?(Hash)
-        hash_value(options, :partial, 'partial') || 'unknown'
-      else
-        options.to_s
-      end
-    end
-
-    # Resolve render options and locals, handling partial path normalization
-    def resolve_render_options(options, locals, importmap_json_str, current_page_path)
-      if options.is_a?(String) || options.is_a?(Symbol)
-        partial_name = normalize_partial_path(options.to_s)
-        merged_locals = merge_page_locals(locals, importmap_json_str, current_page_path)
-        [{ partial: partial_name }, merged_locals]
-      elsif options.is_a?(Hash)
-        partial_path = hash_value(options, :partial, 'partial')
-        if partial_path
-          normalized_path = normalize_partial_path(partial_path.to_s)
-          provided_locals = hash_value(options, :locals, 'locals').presence || locals.presence || {}
-          merged_locals = merge_page_locals(provided_locals, importmap_json_str, current_page_path)
-          # Remove :partial and :locals from options to avoid conflicts
-          clean_options = options.reject { |k, _| [:partial, 'partial', :locals, 'locals'].include?(k) }
-          [{ partial: normalized_path }.merge(clean_options), merged_locals]
-        else
-          merged_locals = merge_page_locals(locals, importmap_json_str, current_page_path)
-          [options, merged_locals]
-        end
-      else
-        [options, locals]
-      end
-    end
 
     # Render page template using ActionView
     def render_page_template(view, content, page_name, importmap_json_str, current_page_path, erb_file)
@@ -326,7 +282,10 @@ module StaticSiteBuilder
         end
       end
 
-      # Extend view with PageHelpers if available
+      # Extend view instance with PageHelpers
+      # Note: We extend the instance here because the view is already created.
+      # For future refactoring, PageHelpers could be included in setup_action_view_context
+      # before instantiation, but this requires loading PageHelpers earlier.
       if defined?(PageHelpers)
         view.extend(PageHelpers) unless view.singleton_class.included_modules.include?(PageHelpers)
       end
@@ -372,22 +331,6 @@ module StaticSiteBuilder
       end
     end
 
-    # Normalize partial path by adding PARTIALS_DIR prefix if no path separator exists
-    def normalize_partial_path(partial_name)
-      if partial_name.include?('/')
-        partial_name
-      else
-        "#{PARTIALS_DIR}/#{partial_name}"
-      end
-    end
-
-    # Merge page-level locals (importmap_json, current_page) with provided locals
-    def merge_page_locals(locals, importmap_json_str, current_page_path)
-      {
-        importmap_json: importmap_json_str,
-        current_page: current_page_path
-      }.merge(locals.is_a?(Hash) ? locals : {})
-    end
 
     # Generate live reload WebSocket script if live reload is enabled
     def live_reload_script
@@ -603,7 +546,6 @@ module StaticSiteBuilder
       
       load_page_helpers_and_set_metadata(view, current_page_path)
       setup_view_instance_variables(view, importmap_json_str, current_page_path)
-      override_view_render_method(view, importmap_json_str, current_page_path)
       
       page_content = render_page_template(view, content, page_name, importmap_json_str, current_page_path, erb_file)
       rendered = render_layout_template(view, layout_content, layout_file, page_content, importmap_json_str, current_page_path)
