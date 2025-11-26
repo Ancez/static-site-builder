@@ -8,6 +8,26 @@ require "fileutils"
 require "json"
 require "pathname"
 require "digest"
+
+# Create minimal ActionController stub for meta-tags gem compatibility
+# meta-tags expects ActionController to be available but we're using ActionView standalone
+unless defined?(ActionController)
+  module ActionController
+    class Base
+      # meta-tags gem calls ActionController::Base.helpers
+      # In Rails, this returns an instance that includes ActionView::Helpers
+      # We create a simple object that extends ActionView::Helpers modules
+      def self.helpers
+        @helpers ||= Object.new.tap do |helper_obj|
+          helper_obj.extend(ActionView::Helpers::TagHelper)
+          helper_obj.extend(ActionView::Helpers::OutputSafetyHelper)
+          helper_obj.extend(ActionView::Helpers::TextHelper)
+        end
+      end
+    end
+  end
+end
+
 # Require meta-tags gem (handle Railtie gracefully for non-Rails usage)
 begin
   require "meta_tags"
