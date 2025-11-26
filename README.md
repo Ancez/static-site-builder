@@ -133,10 +133,10 @@ ERB templates use **ActionView** - partials, layouts, helpers, and all Rails vie
 ```erb
 <h1><%= @title %></h1>
 <p><%= @description %></p>
-<%= render 'shared/card', locals: { title: 'Card Title', content: 'Card content' } %>
+<%= render partial: 'shared/card', locals: { title: 'Card Title', content: 'Card content' } %>
 ```
 
-Layout elements like header and footer belong in `app/views/layouts/application.html.erb`:
+**Important**: Layout elements like header and footer belong in `app/views/layouts/application.html.erb`, not in pages. Pages should only contain page-specific content. Partials are for reusable components (cards, buttons, alerts), not layout elements.
 
 ```erb
 <!DOCTYPE html>
@@ -153,6 +153,8 @@ Layout elements like header and footer belong in `app/views/layouts/application.
 </body>
 </html>
 ```
+
+**Rails conventions**: Use explicit partial paths (e.g., `render 'shared/footer'`). ActionView's standard rendering is used without any custom overrides, ensuring full compatibility with Rails patterns.
 
 Page metadata is automatically configured in `lib/page_helpers.rb` (generated automatically):
 

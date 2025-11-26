@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Removed render method override - now uses ActionView's render directly without custom path normalization
+- Changed helper inclusion from `extend` to `include` on view class (more Rails-like pattern)
+- Partials now require explicit paths (e.g., `render 'shared/footer'` instead of `render 'footer'`)
+- Updated tests and examples to show proper usage: partials for reusable components, layout elements in layouts
+
+### Fixed
+- Added minimal ActionController stub for meta-tags gem compatibility
+- Fixed MetaTags gem compatibility when using ActionView standalone
+- All MetaTags-related test failures resolved
+
+### Removed
+- Removed partial path normalization (`'footer'` → `'shared/footer'`)
+- Removed auto-merge of `importmap_json` and `current_page` into all partials
+- Removed `PARTIALS_DIR` constant and related helper methods
+
 ## [0.1.4] - 2025-11-22
 
 ### Added
