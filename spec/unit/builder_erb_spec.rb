@@ -14,7 +14,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -24,40 +24,30 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(content).to include("<h1>Hello</h1>")
     end
 
-    it "uses PageHelpers::PAGES metadata correctly" do
-      # Create page_helpers.rb with metadata
-      lib_dir = site_root.join("lib")
-      FileUtils.mkdir_p(lib_dir)
-      page_helpers_content = <<~RUBY
-        module PageHelpers
-          PAGES = {
-            '/test' => {
-              title: 'Test Page',
-              description: 'A test page'
-            }
-          }.freeze
-        end
-      RUBY
-      File.write(lib_dir.join("page_helpers.rb"), page_helpers_content)
+    it "allows pages to set meta tags directly using meta-tags gem" do
+      # Pages set meta tags directly in templates using meta-tags gem
+      page_content = <<~ERB
+        <% set_meta_tags title: 'Test Page', description: 'A test page' %>
+        <h1>Content</h1>
+      ERB
+      create_test_page(site_root.to_s, "test.html.erb", page_content)
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><%= display_meta_tags %></head><body><%= page_content %></body></html>")
 
-      create_test_page(site_root.to_s, "test.html.erb", "<h1>Content</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><title><%= @title || 'Site' %></title></head><body><%= page_content %></body></html>")
-
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/test.html")
       expect(output).to exist
 
       content = File.read(output)
-      expect(content).to include("Test Page")
+      expect(content).to include("<title>Test Page</title>")
       expect(content).to include("<h1>Content</h1>")
     end
 
     it "uses default layout when not specified" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -73,7 +63,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       FileUtils.mkdir_p(nested_dir)
       File.write(nested_dir.join("index.html.erb"), "<h1>Blog</h1>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/blog/index.html")
@@ -91,7 +81,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
       create_test_page(site_root.to_s, "test.html.erb", page_content)
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/test.html")
@@ -105,7 +95,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none", annotate_template_file_names: true)
+      builder = described_class.new(root: site_root.to_s, , annotate_template_file_names: true)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -122,7 +112,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none", annotate_template_file_names: false)
+      builder = described_class.new(root: site_root.to_s, , annotate_template_file_names: false)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -138,7 +128,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
       ENV["LIVE_RELOAD"] = "true"
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -166,7 +156,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -193,7 +183,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -210,33 +200,19 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       
       expect { builder.build }.to raise_error(/Partial template not found/)
     end
 
-    it "renders partials with access to page variables" do
-      # Create page_helpers.rb with metadata
-      lib_dir = site_root.join("lib")
-      FileUtils.mkdir_p(lib_dir)
-      page_helpers_content = <<~RUBY
-        module PageHelpers
-          PAGES = {
-            '/' => {
-              title: 'My Page Title',
-              description: 'A test page'
-            }
-          }.freeze
-        end
-      RUBY
-      File.write(lib_dir.join("page_helpers.rb"), page_helpers_content)
-
-      # Create a partial that uses @title
+    it "allows pages to set instance variables that partials can access" do
+      # Pages set instance variables directly, partials can access them
       shared_dir = site_root.join("app/views/shared")
       FileUtils.mkdir_p(shared_dir)
       File.write(shared_dir.join("_title.html.erb"), "<h1><%= @title %></h1>")
       
       page_content = <<~ERB
+        <% @title = 'My Page Title' %>
         <div>
           <%= render 'shared/title' %>
           <p>Content</p>
@@ -245,7 +221,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -271,7 +247,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -293,7 +269,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -314,7 +290,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -338,7 +314,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       create_test_page(site_root.to_s, "index.html.erb", page_content)
       create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -376,7 +352,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       ERB
       create_test_layout(site_root.to_s, "application.html.erb", layout_content)
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -388,6 +364,36 @@ RSpec.describe StaticSiteBuilder::Builder do
       # Page content should be between them
       expect(content).to include("<h1>Page Title</h1>")
       expect(content).to include("<p>Page content goes here</p>")
+    end
+
+    it "supports absolute paths for partials from any directory" do
+      # Create shared partial
+      shared_dir = site_root.join("app/views/shared")
+      FileUtils.mkdir_p(shared_dir)
+      File.write(shared_dir.join("_footer.html.erb"), "<footer>Shared Footer</footer>")
+      
+      # Create nested page directory
+      blog_dir = site_root.join("app/views/pages/blog")
+      FileUtils.mkdir_p(blog_dir)
+      
+      # Create page in nested directory that uses absolute path to shared partial
+      page_content = <<~ERB
+        <div>
+          <h1>Blog Page</h1>
+          <%= render 'shared/footer' %>
+        </div>
+      ERB
+      File.write(blog_dir.join("index.html.erb"), page_content)
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+
+      builder = described_class.new(root: site_root.to_s)
+      builder.build
+
+      output = site_root.join("dist/blog/index.html")
+      content = File.read(output)
+      
+      # Absolute path 'shared/footer' should work from nested directory
+      expect(content).to include("<footer>Shared Footer</footer>")
     end
   end
 end

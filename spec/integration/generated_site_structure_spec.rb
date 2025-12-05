@@ -31,7 +31,7 @@ RSpec.describe "Generated site structure" do
     it "generates valid JSON when npm is needed" do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        js_bundler: "esbuild"
+        
       )
       generator.generate
 
@@ -44,8 +44,8 @@ RSpec.describe "Generated site structure" do
     it "includes correct scripts" do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        js_bundler: "esbuild",
-        css_framework: "tailwindcss"
+        ,
+        
       )
       generator.generate
 

@@ -16,7 +16,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       File.write(js_dir.join("application.js"), "app")
       File.write(js_dir.join("nested/module.js"), "module")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       expect(site_root.join("dist/assets/javascripts/application.js")).to exist
@@ -28,7 +28,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       File.write(css_dir.join("application.css"), "body { margin: 0; }")
       File.write(css_dir.join("custom.css"), ".custom { color: red; }")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       expect(site_root.join("dist/assets/stylesheets/application.css")).to exist
@@ -42,7 +42,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       # Create Tailwind config to trigger skip
       File.write(site_root.join("tailwind.config.js"), "module.exports = {};")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       # CSS should not be copied when Tailwind config exists
@@ -53,7 +53,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       # Remove javascript directory
       FileUtils.rm_rf(site_root.join("app/javascript"))
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       expect { builder.build }.not_to raise_error
     end
 
@@ -62,7 +62,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       File.write(js_file, "test")
       File.chmod(0o755, js_file)
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       dist_file = site_root.join("dist/assets/javascripts/application.js")

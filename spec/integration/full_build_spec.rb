@@ -5,14 +5,14 @@ require "spec_helper"
 RSpec.describe "Full build integration" do
   let(:site_root) { @tmp_dir.join("generated-site") }
 
-  describe "ERB + Importmap + Stimulus + TailwindCSS" do
+  describe "ERB + Esbuild +  + TailwindCSS" do
     before do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
         template_engine: "erb",
-        js_bundler: "importmap",
-        css_framework: "tailwindcss",
-        js_framework: "stimulus"
+        ,
+        
+        
       )
       generator.generate
     end
@@ -20,7 +20,7 @@ RSpec.describe "Full build integration" do
     it "generates valid project structure" do
       expect(site_root.join("Gemfile")).to exist
       expect(site_root.join("app/views/pages/index.html.erb")).to exist
-      expect(site_root.join("config/importmap.rb")).to exist
+      expect(site_root.join("esbuild.config.js")).to exist
       expect(site_root.join("tailwind.config.js")).to exist
     end
 
@@ -68,7 +68,7 @@ RSpec.describe "Full build integration" do
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
         template_engine: "erb",
-        js_bundler: "importmap"
+        
       )
 
       expect { builder.build }.not_to raise_error
@@ -84,9 +84,9 @@ RSpec.describe "Full build integration" do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
         template_engine: "erb",
-        js_bundler: "none",
-        css_framework: "plain",
-        js_framework: "vanilla"
+        ,
+        
+        
       )
       generator.generate
     end
@@ -95,14 +95,13 @@ RSpec.describe "Full build integration" do
       expect(site_root.join("Gemfile")).to exist
       expect(site_root.join("app/views/pages/index.html.erb")).to exist
       expect(site_root.join("package.json")).not_to exist
-      expect(site_root.join("config/importmap.rb")).not_to exist
     end
 
     it "builds successfully without npm dependencies" do
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
         template_engine: "erb",
-        js_bundler: "none"
+        
       )
 
       expect { builder.build }.not_to raise_error

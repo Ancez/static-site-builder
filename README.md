@@ -8,7 +8,9 @@ A Ruby-based generator and builder for creating static HTML sites with working J
 
 ## Why This Exists
 
-Uses **ActionView** to render ERB templates - get the full flexibility of Rails views (partials, layouts, helpers) compiled to static HTML. Uses standard Ruby gems and familiar patterns.
+Uses **ActionView** to render ERB files - get Rails-like layouts, pages, and partials compiled to static HTML. Uses standard Ruby gems and familiar patterns.
+
+**Note**: This gem generates standalone static sites. While it uses ActionView (like Rails), it's designed for static site generation without a full Rails application, allowing you to host it for free directly on Cloudflare CDNs and other static hosting services.
 
 ## Why Choose This Over Other Approaches
 
@@ -16,18 +18,13 @@ Uses **ActionView** to render ERB templates - get the full flexibility of Rails 
 
 **Simplicity Over Complexity**: No need for complex JavaScript frameworks, hydration, or server-side rendering setups. Write Ruby templates that compile to clean, static HTML. Add JavaScript only where you need interactivity, not as a requirement for rendering.
 
-**Developer Experience**: Work with familiar Rails patterns (ERB, ActionView, partials) without the overhead of a full Rails application. Build fast, deploy anywhere, and maintain easily.
+**Developer Experience**: Work with familiar Rails patterns (layouts, pages, partials) without a full Rails application, allowing you to host it for free directly on Cloudflare CDNs and other static hosting services.
 
 **Version Control & Mobile Editing**: Your entire site is code in a Git repository. Track changes, collaborate, and edit from anywhere - even your phone with tools like Cursor Agents. No database migrations or CMS interfaces needed. Lightning fast.
 
 ## Main Objective
 
-Generate static HTML pages with JavaScript files that work. Choose your own stack:
-
-- **Template Engine**: ERB
-- **JavaScript Bundler**: Importmap, ESBuild, Webpack, Vite, or none
-- **CSS Framework**: TailwindCSS, shadcn/ui, or plain CSS
-- **JavaScript Framework**: Stimulus, React, Vue, Alpine.js, or vanilla JS
+Generate static HTML pages using ERB templates. Simple and flexible - add your own JavaScript bundling and CSS processing as needed.
 
 ## Installation
 
@@ -55,10 +52,10 @@ bundle install
 ruby bin/generate my-site
 ```
 
-You'll be prompted to choose your stack using an interactive menu with arrow key navigation. Generated sites use:
+Generated sites use:
 - `static-site-builder` gem for compilation
-- Standard gems (importmap-rails, etc.) for functionality
-- npm packages for JS bundlers and frameworks
+- ERB templates for HTML generation
+- Simple structure - add your own JavaScript bundling and CSS processing as needed
 
 ## What Gets Generated
 
@@ -67,10 +64,8 @@ A clean project structure that depends on gems:
 ```
 my-site/
 ├── Gemfile              # Dependencies (static-site-builder, sitemap_generator, etc.)
-├── package.json         # JS dependencies (if needed)
 ├── Rakefile            # Build tasks (includes sitemap generation)
 ├── config/
-│   ├── importmap.rb    # Importmap config (if using importmap)
 │   └── sitemap.rb      # Sitemap generation config
 ├── app/
 │   ├── views/
@@ -79,184 +74,162 @@ my-site/
 │   │   └── components/     # Reusable components/partials
 │   ├── javascript/
 │   └── assets/
+│       └── stylesheets/
 └── lib/
-    ├── site_builder.rb   # Compiles your site
-    └── page_helpers.rb   # Page metadata (title, description, etc.)
+    └── site_builder.rb   # Compiles your site
 ```
 
 ## How It Works
 
 1. **Generator** (`static-site-generator`) - Creates the project structure
 2. **Builder Gem** (`static-site-builder`) - Handles ERB compilation
-3. **Standard Gems** - importmap-rails, etc. for functionality
-4. **Build Tools** - Rake tasks that use the builder gem
+3. **Build Tools** - Rake tasks that use the builder gem
+4. **Your Tools** - Add Tailwind CSS CLI, ESBuild, or any other tools you need
 
 ## Features
 
 - 🎯 **Static HTML output** - No server-side rendering needed
-- 🔧 **Flexible stack** - Choose what works for you
+- 🔧 **Simple & flexible** - ERB templates, add your own tools
 - 📦 **Gem-based** - Uses existing Ruby gems, not custom code
 - 🚀 **Fast builds** - Compile once, deploy everywhere
 - 🎨 **Component support** - ERB components and partials
-- 📱 **Modern JS** - ES modules, importmaps, or bundlers
 
-## Supported Stacks
+## Adding JavaScript and CSS
 
-### Template Engines
-- **ERB** - Ruby's embedded Ruby templates
+This generator creates a simple ERB-based structure. Add your own JavaScript bundling and CSS processing:
 
-### JavaScript Bundlers
-- **Importmap** - No bundling, use ES modules directly (via importmap-rails gem)
-- **ESBuild** - Fast JavaScript bundler
-- **Webpack** - Powerful bundler with plugins
-- **Vite** - Next-generation frontend tooling
-- **None** - Vanilla JavaScript, no bundling
+### JavaScript
 
-### CSS Frameworks
-- **TailwindCSS** - Utility-first CSS framework
-- **shadcn/ui** - Re-usable components built with Tailwind
-- **Plain CSS** - Write your own styles
+Include JavaScript in your page templates using `content_for :javascript`:
 
-### JavaScript Frameworks
-- **Stimulus** - Modest JavaScript framework
-- **React** - Popular UI library
-- **Vue** - Progressive JavaScript framework
-- **Alpine.js** - Minimal framework for HTML
-- **Vanilla JS** - No framework
+```erb
+<% content_for :javascript do %>
+  <script src="/assets/javascripts/application.js"></script>
+<% end %>
+```
+
+For bundling (ESBuild, Webpack, Vite, etc.), set up your own build process and output to `dist/assets/javascripts/`.
+
+### CSS
+
+For Tailwind CSS, use the CLI:
+
+```bash
+npm install -D tailwindcss
+npx tailwindcss init
+```
+
+Configure `tailwind.config.js`:
+```js
+module.exports = {
+  content: ["./app/views/**/*.{html,erb}", "./app/javascript/**/*.js"],
+  theme: { extend: {} },
+  plugins: [],
+}
+```
+
+Add Tailwind directives to `app/assets/stylesheets/application.css`:
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+Then compile CSS: `tailwindcss -i ./app/assets/stylesheets/application.css -o ./dist/assets/stylesheets/application.css --minify`
+
+For watch mode: `tailwindcss -i ./app/assets/stylesheets/application.css -o ./dist/assets/stylesheets/application.css --watch`
+
+Use PostCSS, Sass, or any other CSS tool. Compile your CSS files to `dist/assets/stylesheets/` whenever you need.
 
 ## Building Powerful Websites
 
 ### Using ERB Templates
 
-ERB templates use **ActionView** - partials, layouts, helpers, and all Rails view features work. Create pages in `app/views/pages/`:
+ERB templates use **ActionView** with support for partials and layouts. Use `render partial: 'shared/footer'` syntax.
 
-```erb
-<h1><%= @title %></h1>
-<p><%= @description %></p>
-<%= render partial: 'shared/card', locals: { title: 'Card Title', content: 'Card content' } %>
-```
+### SEO / Meta Tags
 
-**Important**: Layout elements like header and footer belong in `app/views/layouts/application.html.erb`, not in pages. Pages should only contain page-specific content. Partials are for reusable components (cards, buttons, alerts), not layout elements.
-
-```erb
-<!DOCTYPE html>
-<html>
-<head>
-  <%= display_meta_tags site: 'Site', title: 'Site' %>
-</head>
-<body>
-  <%= render 'shared/header' %>
-  <main>
-    <%= page_content %>
-  </main>
-  <%= render 'shared/footer' %>
-</body>
-</html>
-```
-
-**Rails conventions**: Use explicit partial paths (e.g., `render 'shared/footer'`). ActionView's standard rendering is used without any custom overrides, ensuring full compatibility with Rails patterns.
-
-Page metadata is automatically configured in `lib/page_helpers.rb` (generated automatically):
+To minimize code duplication, define default meta tags in `app/helpers/application_helper.rb`:
 
 ```ruby
-module PageHelpers
-  PAGES = {
-    '/' => {
-      title: 'My Page',
-      description: 'A great page',
-      url: 'https://example.com',
-      image: 'https://example.com/image.jpg',
-      priority: 1.0,
-      changefreq: 'weekly'
-    }
-  }.freeze
+def default_meta_tags
+  {
+    site: 'Site',
+    title: 'Site',
+    description: 'Default description',
+    keywords: 'keyword1, keyword2',
+    separator: '&mdash;'.html_safe
+  }
 end
 ```
 
-The builder automatically loads metadata from `PageHelpers::PAGES` and sets `@title`, `@description`, `@url`, and `@image` instance variables for use in your templates. This metadata is also used by the `sitemap_generator` gem for generating sitemaps.
-
-Use layouts in `app/views/layouts/application.html.erb`:
+Then in your layout, use:
 
 ```erb
-<!DOCTYPE html>
-<html>
-<head>
-  <title><%= @title || "My Site" %></title>
-</head>
-<body>
-  <%= yield %>
-</body>
-</html>
+<%= display_meta_tags(default_meta_tags) %>
 ```
 
-### JavaScript with Importmap
-
-No bundling needed - use ES modules directly:
-
-```javascript
-// app/javascript/application.js
-import { Application } from "@hotwired/stimulus"
-import HelloController from "./controllers/hello_controller"
-
-window.Stimulus = Application.start()
-Stimulus.register("hello", HelloController)
-```
-
-### JavaScript with Bundlers
-
-Use ESBuild, Webpack, or Vite for modern tooling:
-
-```javascript
-// app/javascript/index.js
-import React from 'react'
-import { createRoot } from 'react-dom/client'
-
-function App() {
-  return <h1>Hello from React!</h1>
-}
-
-const root = createRoot(document.getElementById('app'))
-root.render(<App />)
-```
-
-### CSS with TailwindCSS
-
-Use utility classes directly in templates:
+Override in individual pages:
 
 ```erb
-<div class="container mx-auto px-4">
-  <h1 class="text-4xl font-bold text-gray-900">Hello World</h1>
-</div>
+<% set_meta_tags title: 'Page Title', description: 'Page description' %>
 ```
 
-### CSS with shadcn/ui
+You can also set Open Graph and Twitter Card tags:
 
-Install components and use them in your templates:
-
-```bash
-npx shadcn-ui@latest add button
+```erb
+<% set_meta_tags og: { title: 'OG Title', type: 'website', image: 'https://example.com/image.jpg' } %>
+<% set_meta_tags twitter: { card: 'summary', site: '@username' } %>
 ```
+
+See the [meta-tags gem documentation](https://github.com/kpumuk/meta-tags) for all available options.
+
+### Adding JavaScript
+
+Include JavaScript files in your page templates:
+
+```erb
+<% content_for :javascript do %>
+  <script src="/assets/javascripts/application.js"></script>
+<% end %>
+```
+
+Set up your own bundler if needed and output to `dist/assets/javascripts/`. See setup guides:
+- [ESBuild](guides/setup-esbuild.md)
+- [Webpack](https://webpack.js.org/) - see webpack documentation
+- [Vite](https://github.com/ElMassimo/vite_ruby) - see vite-plugin-ruby
+
+### Adding CSS
+
+Write CSS in `app/assets/stylesheets/application.css`. Use any CSS tool you prefer:
+
+- [Tailwind CSS](guides/setup-tailwind.md)
+- PostCSS, Sass, Less, or any other CSS processor - just compile your CSS files to `dist/assets/stylesheets/` before building HTML.
 
 ### Generating Sitemaps
 
 Sitemap generation is automatically configured when you generate a new site. The `sitemap_generator` gem is included in the Gemfile, and `config/sitemap.rb` is automatically created.
 
-The sitemap is generated from your `PageHelpers::PAGES` metadata during `rake build:all`. Update `config/sitemap.rb` to set your domain:
+The sitemap is automatically generated from all pages in `app/views/pages/` during `rake build:all`. Update `config/sitemap.rb` to set your domain:
 
 ```ruby
 SitemapGenerator::Sitemap.default_host = 'https://yourdomain.com'
 ```
 
-The sitemap will be generated in `dist/sitemaps/sitemap.xml.gz` during the build process.
+You can customize priority, changefreq, and lastmod in `config/sitemap.rb`. The sitemap will be generated in `dist/sitemaps/sitemap.xml.gz` during the build process.
 
 ## Examples
 
-### ERB + Importmap + Stimulus + TailwindCSS
+### Basic ERB Site
 ```bash
 static-site-builder new my-site
-# Choose: ERB, Importmap, TailwindCSS, Stimulus
 ```
 
+This creates a simple ERB-based site. Add Tailwind CSS, JavaScript bundlers, or any other tools you need.
+
+## Upgrading
+
+If you have an existing site from an older version, see [UPGRADE.md](UPGRADE.md) for migration instructions.
 
 ## Notable Projects
 
@@ -268,21 +241,11 @@ Sites built with Static Site Builder:
 
 ## Requirements
 
-### For Importmap Projects
+- Ruby 3.0+
+- Bundler
 
-When using **Importmap** as your JavaScript bundler:
-
-1. **Install npm dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Build your site** - vendor files are automatically copied from `node_modules` to `dist/assets/javascripts/` during the build:
-   ```bash
-   rake build:all
-   ```
-
-The build process automatically copies required vendor JavaScript files directly from `node_modules` to `dist/assets/javascripts/` based on your importmap configuration. No intermediate `vendor/javascript/` folder is needed.
+Optional (if you want to use Tailwind CSS or JavaScript bundlers):
+- Node.js and npm
 
 ## Development
 
@@ -293,7 +256,6 @@ After generating a site, you can run it locally with auto-rebuild and live reloa
 ```bash
 cd my-site
 bundle install
-npm install  # Required for importmap projects and JS frameworks
 
 # Start development server (auto-rebuilds on file changes)
 rake dev:server

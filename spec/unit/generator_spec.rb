@@ -9,25 +9,16 @@ RSpec.describe StaticSiteBuilder::Generator do
 
       expect(generator.instance_variable_get(:@app_name)).to eq("test-app")
       expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("erb")
-      expect(generator.instance_variable_get(:@options)[:js_bundler]).to eq("importmap")
-      expect(generator.instance_variable_get(:@options)[:css_framework]).to eq("tailwindcss")
-      expect(generator.instance_variable_get(:@options)[:js_framework]).to eq("stimulus")
     end
 
     it "accepts custom options" do
       options = {
-        template_engine: "erb",
-        js_bundler: "esbuild",
-        css_framework: "plain",
-        js_framework: "react"
+        template_engine: "erb"
       }
 
       generator = described_class.new("test-app", options)
 
       expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("erb")
-      expect(generator.instance_variable_get(:@options)[:js_bundler]).to eq("esbuild")
-      expect(generator.instance_variable_get(:@options)[:css_framework]).to eq("plain")
-      expect(generator.instance_variable_get(:@options)[:js_framework]).to eq("react")
     end
 
     it "creates app_path as Pathname" do
@@ -68,80 +59,24 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(content).to include("rake")
     end
 
-    it "includes importmap-rails in Gemfile when using importmap" do
-      generator = described_class.new(app_path.to_s, js_bundler: "importmap")
-      generator.generate
-
-      gemfile = app_path.join("Gemfile")
-      content = File.read(gemfile)
-      expect(content).to include("importmap-rails")
-    end
-
-
-    it "creates package.json when npm is needed" do
-      generator = described_class.new(app_path.to_s, js_bundler: "esbuild")
-      generator.generate
-
-      package_json = app_path.join("package.json")
-      expect(package_json).to exist
-
-      content = JSON.parse(File.read(package_json))
-      expect(content["devDependencies"]).to have_key("esbuild")
-    end
-
-    it "does not create package.json when npm is not needed" do
-      generator = described_class.new(app_path.to_s, js_bundler: "none", css_framework: "plain", js_framework: "vanilla")
+    it "does not create package.json" do
+      generator = described_class.new(app_path.to_s)
       generator.generate
 
       package_json = app_path.join("package.json")
       expect(package_json).not_to exist
     end
 
-    it "creates importmap config when using importmap" do
-      generator = described_class.new(app_path.to_s, js_bundler: "importmap")
-      generator.generate
 
-      importmap_config = app_path.join("config/importmap.rb")
-      expect(importmap_config).to exist
-
-      content = File.read(importmap_config)
-      expect(content).to include("pin")
-    end
-
-    it "creates tailwind config when using tailwindcss" do
-      generator = described_class.new(app_path.to_s, css_framework: "tailwindcss")
-      generator.generate
-
-      tailwind_config = app_path.join("tailwind.config.js")
-      expect(tailwind_config).to exist
-
-      postcss_config = app_path.join("postcss.config.js")
-      expect(postcss_config).to exist
-    end
-
-    it "creates CSS file with Tailwind directives and custom layers for tailwindcss" do
-      generator = described_class.new(app_path.to_s, css_framework: "tailwindcss")
+    it "creates CSS file" do
+      generator = described_class.new(app_path.to_s)
       generator.generate
 
       css_file = app_path.join("app/assets/stylesheets/application.css")
       expect(css_file).to exist
 
       content = File.read(css_file)
-      expect(content).to include("@tailwind base")
-      expect(content).to include("@tailwind components")
-      expect(content).to include("@tailwind utilities")
-      expect(content).to include("@layer base")
-      expect(content).to include("scroll-behavior: smooth")
-      expect(content).to include("@layer utilities")
-      expect(content).to include("scroll-margin-top: 5rem")
-    end
-
-    it "creates esbuild config when using esbuild" do
-      generator = described_class.new(app_path.to_s, js_bundler: "esbuild")
-      generator.generate
-
-      esbuild_config = app_path.join("esbuild.config.js")
-      expect(esbuild_config).to exist
+      expect(content).to include("font-family")
     end
 
     it "creates ERB layout when using erb" do
@@ -167,31 +102,15 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(content).to include("Welcome")
     end
 
-    it "creates Stimulus entry when using stimulus" do
-      generator = described_class.new(app_path.to_s, js_framework: "stimulus")
+    it "creates JavaScript entry file" do
+      generator = described_class.new(app_path.to_s)
       generator.generate
 
       js_file = app_path.join("app/javascript/application.js")
       expect(js_file).to exist
 
       content = File.read(js_file)
-      expect(content).to include("@hotwired/stimulus")
-      expect(content).to include("Application.start()")
-      expect(content).to include("controllers")
-
-      controllers_dir = app_path.join("app/javascript/controllers")
-      expect(controllers_dir).to exist
-    end
-
-    it "creates React entry when using react" do
-      generator = described_class.new(app_path.to_s, js_framework: "react")
-      generator.generate
-
-      js_file = app_path.join("app/javascript/application.js")
-      expect(js_file).to exist
-
-      content = File.read(js_file)
-      expect(content).to include("react")
+      expect(content).to include("Application loaded")
     end
 
     it "creates Rakefile" do

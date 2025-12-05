@@ -20,28 +20,15 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(builder.instance_variable_get(:@template_engine)).to eq("erb")
     end
 
-    it "sets default js_bundler to importmap" do
-      builder = described_class.new
-      expect(builder.instance_variable_get(:@js_bundler)).to eq("importmap")
-    end
-
     it "accepts custom options" do
       builder = described_class.new(
         root: @tmp_dir.to_s,
-        template_engine: "erb",
-        js_bundler: "esbuild"
+        template_engine: "erb"
       )
 
       expect(builder.instance_variable_get(:@template_engine)).to eq("erb")
-      expect(builder.instance_variable_get(:@js_bundler)).to eq("esbuild")
     end
 
-    it "creates SimpleImportMap when importmap-rails is not available" do
-      builder = described_class.new(js_bundler: "importmap")
-      importmap = builder.instance_variable_get(:@importmap)
-
-      expect(importmap).to be_a(StaticSiteBuilder::Builder::SimpleImportMap)
-    end
   end
 
   describe "#build" do
@@ -52,7 +39,7 @@ RSpec.describe StaticSiteBuilder::Builder do
     end
 
     it "creates dist directory" do
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       expect(site_root.join("dist")).to exist
@@ -65,7 +52,7 @@ RSpec.describe StaticSiteBuilder::Builder do
       File.write(dist_dir.join("old-file.txt"), "content")
 
       ENV["PRODUCTION"] = "true"
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       expect(dist_dir.join("old-file.txt")).not_to exist
@@ -76,7 +63,7 @@ RSpec.describe StaticSiteBuilder::Builder do
     it "copies JavaScript assets" do
       create_test_js_file(site_root.to_s, "application.js", "console.log('test');")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       dist_js = site_root.join("dist/assets/javascripts/application.js")
@@ -87,7 +74,7 @@ RSpec.describe StaticSiteBuilder::Builder do
     it "copies CSS assets" do
       create_test_css_file(site_root.to_s, "application.css", "body { margin: 0; }")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       dist_css = site_root.join("dist/assets/stylesheets/application.css")
@@ -95,31 +82,13 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(File.read(dist_css)).to include("body { margin: 0; }")
     end
 
-    it "copies vendor JavaScript files from node_modules for importmap" do
-      # Create importmap config with a vendor package
-      create_importmap_config(site_root.to_s, <<~RUBY)
-        pin "@test/package", to: "test.js", preload: true
-      RUBY
-
-      # Create node_modules structure
-      node_modules = site_root.join("node_modules/@test/package")
-      FileUtils.mkdir_p(node_modules.join("dist"))
-      File.write(node_modules.join("dist/test.js"), "test package code")
-
-      builder = described_class.new(root: site_root.to_s, js_bundler: "importmap")
-      builder.build
-
-      dist_vendor = site_root.join("dist/assets/javascripts/test.js")
-      expect(dist_vendor).to exist
-      expect(File.read(dist_vendor)).to eq("test package code")
-    end
 
     it "copies static files from public directory" do
       public_dir = site_root.join("public")
       FileUtils.mkdir_p(public_dir)
       File.write(public_dir.join("robots.txt"), "User-agent: *")
 
-      builder = described_class.new(root: site_root.to_s, js_bundler: "none")
+      builder = described_class.new(root: site_root.to_s)
       builder.build
 
       dist_robots = site_root.join("dist/robots.txt")

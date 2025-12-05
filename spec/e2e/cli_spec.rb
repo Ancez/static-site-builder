@@ -14,9 +14,9 @@ RSpec.describe "CLI" do
       generator = StaticSiteBuilder::Generator.new(
         site_path.to_s,
         template_engine: "erb",
-        js_bundler: "importmap",
-        css_framework: "tailwindcss",
-        js_framework: "stimulus"
+        ,
+        
+        
       )
 
       expect { generator.generate }.not_to raise_error

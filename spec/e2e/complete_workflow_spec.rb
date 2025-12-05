@@ -5,28 +5,28 @@ require "spec_helper"
 RSpec.describe "Complete workflow" do
   let(:site_root) { @tmp_dir.join("workflow-site") }
 
-  describe "ERB + Importmap + Stimulus + TailwindCSS workflow" do
+  describe "ERB + Esbuild +  + TailwindCSS workflow" do
     it "generates and builds successfully" do
       # Generate site
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
         template_engine: "erb",
-        js_bundler: "importmap",
-        css_framework: "tailwindcss",
-        js_framework: "stimulus"
+        ,
+        
+        
       )
       generator.generate
 
       # Verify generation
       expect(site_root.join("Gemfile")).to exist
       expect(site_root.join("app/views/pages/index.html.erb")).to exist
-      expect(site_root.join("config/importmap.rb")).to exist
+      expect(site_root.join("esbuild.config.js")).to exist
 
       # Build site
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
         template_engine: "erb",
-        js_bundler: "importmap"
+        
       )
       builder.build
 
@@ -34,7 +34,6 @@ RSpec.describe "Complete workflow" do
       expect(site_root.join("dist/index.html")).to exist
       expect(site_root.join("dist/assets/javascripts/application.js")).to exist
       expect(site_root.join("dist/assets/stylesheets")).to exist
-      expect(site_root.join("dist/assets/importmap.json")).to exist
     end
   end
 
@@ -44,9 +43,9 @@ RSpec.describe "Complete workflow" do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
         template_engine: "erb",
-        js_bundler: "none",
-        css_framework: "plain",
-        js_framework: "vanilla"
+        ,
+        
+        
       )
       generator.generate
 
@@ -59,7 +58,7 @@ RSpec.describe "Complete workflow" do
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
         template_engine: "erb",
-        js_bundler: "none"
+        
       )
       builder.build
 
@@ -80,7 +79,7 @@ RSpec.describe "Complete workflow" do
       File.write(pages_dir.join("about.html.erb"), "<h1>About</h1>")
       File.write(pages_dir.join("contact.html.erb"), "<h1>Contact</h1>")
 
-      builder = StaticSiteBuilder::Builder.new(root: site_root.to_s, js_bundler: "none")
+      builder = StaticSiteBuilder::Builder.new(root: site_root.to_s)
       builder.build
 
       expect(site_root.join("dist/index.html")).to exist
