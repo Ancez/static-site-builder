@@ -1,8 +1,8 @@
 # Static Site Builder
 
-> **Note**: This project is currently under active development. Whilst the web setup with TailwindCSS and image handling is fully functional and production-ready, other features may be incomplete or subject to change. Please proceed with caution and report any issues you encounter.
+> **Note**: Version 1.0.0 - Stable release.
 
-A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your templates to static HTML and deploy anywhere.
+A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your ERB files to static HTML and deploy anywhere.
 
 📖 **Learn more**: [Demo](https://lukaszczapiewski.com) | [Project Overview](https://lukaszczapiewski.com/projects/static-site-builder) | [Getting Started Guide](https://lukaszczapiewski.com/blog/getting-started-with-static-site-builders)
 
@@ -16,7 +16,7 @@ Uses **ActionView** to render ERB files - get Rails-like layouts, pages, and par
 
 **Better SEO & Search Rankings**: Unlike Single Page Applications (SPAs) that rely on client-side JS rendering, static HTML is immediately crawlable by search engines. Your content is fully indexed from the first request, leading to better search rankings and significantly faster page loads.
 
-**Simplicity Over Complexity**: No need for complex JavaScript frameworks, hydration, or server-side rendering setups. Write Ruby templates that compile to clean, static HTML. Add JavaScript only where you need interactivity, not as a requirement for rendering.
+**Simplicity Over Complexity**: No need for complex JavaScript frameworks, hydration, or server-side rendering setups. Create .html.erb files that compile to clean, static HTML. Add JavaScript only where you need interactivity, not as a requirement for rendering.
 
 **Developer Experience**: Work with familiar Rails patterns (layouts, pages, partials) without a full Rails application, allowing you to host it for free directly on Cloudflare CDNs and other static hosting services.
 
@@ -24,7 +24,7 @@ Uses **ActionView** to render ERB files - get Rails-like layouts, pages, and par
 
 ## Main Objective
 
-Generate static HTML pages using ERB templates. Simple and flexible - add your own JavaScript bundling and CSS processing as needed.
+Generate static HTML pages using ERB files. Simple and flexible - add your own JavaScript bundling and CSS processing as needed.
 
 ## Installation
 
@@ -54,8 +54,7 @@ ruby bin/generate my-site
 
 Generated sites use:
 - `static-site-builder` gem for compilation
-- ERB templates for HTML generation
-- Simple structure - add your own JavaScript bundling and CSS processing as needed
+- ERB files for HTML generation
 
 ## What Gets Generated
 
@@ -89,57 +88,10 @@ my-site/
 ## Features
 
 - 🎯 **Static HTML output** - No server-side rendering needed
-- 🔧 **Simple & flexible** - ERB templates, add your own tools
+- 🔧 **Simple & flexible** - ERB files, add your own tools
 - 📦 **Gem-based** - Uses existing Ruby gems, not custom code
 - 🚀 **Fast builds** - Compile once, deploy everywhere
 - 🎨 **Component support** - ERB components and partials
-
-## Adding JavaScript and CSS
-
-This generator creates a simple ERB-based structure. Add your own JavaScript bundling and CSS processing:
-
-### JavaScript
-
-Include JavaScript in your page templates using `content_for :javascript`:
-
-```erb
-<% content_for :javascript do %>
-  <script src="/assets/javascripts/application.js"></script>
-<% end %>
-```
-
-For bundling (ESBuild, Webpack, Vite, etc.), set up your own build process and output to `dist/assets/javascripts/`.
-
-### CSS
-
-For Tailwind CSS, use the CLI:
-
-```bash
-npm install -D tailwindcss
-npx tailwindcss init
-```
-
-Configure `tailwind.config.js`:
-```js
-module.exports = {
-  content: ["./app/views/**/*.{html,erb}", "./app/javascript/**/*.js"],
-  theme: { extend: {} },
-  plugins: [],
-}
-```
-
-Add Tailwind directives to `app/assets/stylesheets/application.css`:
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-Then compile CSS: `tailwindcss -i ./app/assets/stylesheets/application.css -o ./dist/assets/stylesheets/application.css --minify`
-
-For watch mode: `tailwindcss -i ./app/assets/stylesheets/application.css -o ./dist/assets/stylesheets/application.css --watch`
-
-Use PostCSS, Sass, or any other CSS tool. Compile your CSS files to `dist/assets/stylesheets/` whenever you need.
 
 ## Building Powerful Websites
 
@@ -233,7 +185,7 @@ See the [meta-tags gem documentation](https://github.com/kpumuk/meta-tags) for a
 
 ### Adding JavaScript
 
-Include JavaScript files in your page templates:
+Include JavaScript files in your pages:
 
 ```erb
 <% content_for :javascript do %>
@@ -271,8 +223,6 @@ You can customize priority, changefreq, and lastmod in `config/sitemap.rb`. The 
 ```bash
 static-site-builder new my-site
 ```
-
-This creates a simple ERB-based site. Add Tailwind CSS, JavaScript bundlers, or any other tools you need.
 
 ## Upgrading
 
@@ -524,10 +474,8 @@ This generator follows the Rails pattern:
 ## Contributing
 
 Contributions welcome! Especially:
-- New template engine support
-- New bundler integrations
-- New CSS framework setups
 - Documentation improvements
+- New features and improvements
 
 ## License
 
