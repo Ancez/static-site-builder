@@ -6,65 +6,42 @@ require "erb"
 require "json"
 
 module StaticSiteBuilder
-  # Generates new static site projects with configurable stack options.
+  # Generates new static site projects.
   #
-  # Creates a complete project structure including Gemfile, package.json, build
+  # Creates a complete project structure including Gemfile, build
   # configuration files, example pages, and development server setup.
   #
-  # @example Generate a site with default options (ERB + None + TailwindCSS + Stimulus)
+  # @example Generate a site
   #   generator = StaticSiteBuilder::Generator.new("my-site")
   #   generator.generate
-  #
-  # @example Generate a site with custom stack
-  #   generator = StaticSiteBuilder::Generator.new("my-site", {
-  #     js_bundler: "esbuild",
-  #     css_framework: "shadcn",
-  #     js_framework: "react"
-  #   })
-  #   generator.generate
   class Generator
-    # Supported template engines
-    TEMPLATE_ENGINES = %w[erb].freeze
-
-    # Template engine names (reference Builder constants for consistency)
-    TEMPLATE_ENGINE_ERB = Builder::TEMPLATE_ERB
 
     # Reference StaticSiteBuilder constants for consistency
     DEFAULT_PORT = StaticSiteBuilder::DEFAULT_PORT
     DEFAULT_WS_PORT = StaticSiteBuilder::DEFAULT_WS_PORT
     # File watcher poll interval
     FILE_WATCHER_INTERVAL = 0.5
-    # Tailwind CSS processing delay
-    TAILWIND_PROCESSING_DELAY = 1.5
 
     # Initializes a new generator instance.
     #
     # @param app_name [String] The name of the site to generate (will be used as directory name)
-    # @param options [Hash] Stack configuration options
-    # @option options [String] :template_engine ("erb") Template engine to use. Currently only "erb" is supported.
     def initialize(app_name, options = {})
       @app_name = app_name
       @app_path = Pathname.new(app_name)
-      @options = {
-        template_engine: options.fetch(:template_engine, TEMPLATE_ENGINE_ERB)
-      }
-      validate_options!
+      @options = {}
     end
 
     # Generates the complete static site project.
     #
     # Creates the directory structure, configuration files, example pages, build
-    # scripts, and all necessary dependencies. Displays the selected stack and
-    # provides next steps after successful generation.
+    # scripts, and all necessary dependencies. Provides next steps after successful generation.
     #
     # @return [void]
     def generate
       puts "Generating static site: #{@app_name}"
-      puts "Template engine: #{@options[:template_engine]}"
 
       create_directory_structure
       create_gemfile
-      create_package_json
       create_config_files
       create_app_structure
       create_build_files
@@ -84,23 +61,6 @@ module StaticSiteBuilder
 
     private
 
-    # Validates that all provided options match the allowed values.
-    #
-    # Raises ArgumentError if any option is invalid, providing a helpful error
-    # message listing all valid options.
-    #
-    # @raise [ArgumentError] if any option value is not in the allowed list
-    def validate_options!
-      validations = {
-        template_engine: TEMPLATE_ENGINES
-      }
-
-      validations.each do |key, allowed_values|
-        unless allowed_values.include?(@options[key])
-          raise ArgumentError, "Invalid #{key}: '#{@options[key]}'. Valid options are: #{allowed_values.join(', ')}"
-        end
-      end
-    end
 
 
     # Generates Ruby code for the file watcher used in development server.
@@ -139,6 +99,7 @@ module StaticSiteBuilder
       dirs = [
         "app/views/layouts",
         "app/views/pages",
+        "app/helpers",
         "app/javascript",
         "app/assets/stylesheets",
         "config",
@@ -170,9 +131,6 @@ module StaticSiteBuilder
       write_file("Gemfile", content)
     end
 
-    def create_package_json
-      # Don't create package.json - users can add it themselves if needed
-    end
 
     def create_config_files
     end
@@ -240,7 +198,7 @@ module StaticSiteBuilder
         </head>
         <body>
           <main>
-            <%= page_content %>
+            <%= yield %>
           </main>
 
           <% if content_for?(:javascript) %>
@@ -401,16 +359,15 @@ module StaticSiteBuilder
 
     def create_site_builder
       # Generated sites use the static-site-builder gem
-      # This file just configures it for the chosen stack
+      # This file configures the builder
       content = <<~RUBY
         # frozen_string_literal: true
 
         require "static_site_builder"
 
-        # Configure the builder for your stack
+        # Configure the builder
         builder = StaticSiteBuilder::Builder.new(
-          root: Dir.pwd,
-          template_engine: "#{@options[:template_engine]}"
+          root: Dir.pwd
         )
 
         # Build the site

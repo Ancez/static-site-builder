@@ -48,12 +48,8 @@ module StaticSiteBuilder
     DIST_DIR = "dist"
     # Default JavaScript entry point
     JS_ENTRY_POINT = "application"
-    # Template engine names
-    TEMPLATE_ERB = "erb"
-
-    def initialize(root: Dir.pwd, template_engine: TEMPLATE_ERB, annotate_template_file_names: nil)
+    def initialize(root: Dir.pwd, annotate_template_file_names: nil)
       @root = Pathname.new(root)
-      @template_engine = template_engine
 
       # Auto-enable annotations in development (when LIVE_RELOAD is enabled)
       @annotate_template_file_names = if annotate_template_file_names.nil?
@@ -93,7 +89,7 @@ module StaticSiteBuilder
       copy_assets(dist_dir)
 
       # Compile ERB templates to static HTML pages
-      compile_erb_pages(dist_dir) if @template_engine == TEMPLATE_ERB
+      compile_erb_pages(dist_dir)
 
       # Copy static files from public/ directory to dist
       copy_static_files(dist_dir)
@@ -159,8 +155,37 @@ module StaticSiteBuilder
       # Include helpers on the class (Rails pattern) rather than extending instances
       view_class.include(MetaTags::ViewHelper) unless view_class.included_modules.include?(MetaTags::ViewHelper)
       
+      # Automatically load helpers from app/helpers/
+      load_helpers(view_class)
+      
       view = view_class.new(lookup_context, {}, self)
       view
+    end
+
+    # Automatically load helper modules from app/helpers/ directory
+    def load_helpers(view_class)
+      helpers_dir = @root.join('app', 'helpers')
+      return unless helpers_dir.exist? && helpers_dir.directory?
+
+      Dir.glob(helpers_dir.join('**', '*_helper.rb')).each do |helper_file|
+        begin
+          # Get the module name from the file (e.g., app/helpers/application_helper.rb -> ApplicationHelper)
+          relative_path = Pathname.new(helper_file).relative_path_from(helpers_dir)
+          module_name = relative_path.to_s.gsub(/\.rb$/, '').split('_').map(&:capitalize).join
+          
+          # Require the file
+          require helper_file
+          
+          # Include the module if it exists
+          if Object.const_defined?(module_name)
+            helper_module = Object.const_get(module_name)
+            view_class.include(helper_module) unless view_class.included_modules.include?(helper_module)
+          end
+        rescue LoadError, NameError => e
+          # Silently skip if helper can't be loaded (e.g., missing dependencies)
+          # This allows users to have helpers that require additional gems
+        end
+      end
     end
 
 
@@ -210,8 +235,12 @@ module StaticSiteBuilder
     def render_layout_template(view, layout_content, layout_file, page_content)
       layout = StaticSiteBuilder::DEFAULT_LAYOUT_NAME
       
+      # Replace <%= yield %> with a local variable in the layout content
+      # This allows us to pass page_content as a local while maintaining Rails-like syntax
+      layout_content_with_yield = layout_content.gsub(/<%=?\s*yield\s*%>/, '<%= page_content %>')
+      
       layout_template = ActionView::Template.new(
-        layout_content,
+        layout_content_with_yield,
         'inline:layout',
         ActionView::Template::Handlers::ERB.new,
         virtual_path: "layouts/#{layout}",
@@ -221,7 +250,7 @@ module StaticSiteBuilder
 
       safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
       
-      # Pass page_content as local (instance variables like @title, @js_modules set by page template)
+      # Render layout with page_content as local
       rendered = view.render(template: layout_template, locals: {
         page_content: safe_page_content
       })
@@ -284,17 +313,11 @@ module StaticSiteBuilder
       end
 
       # Handle CSS files
-      # If Tailwind is configured, it outputs directly to dist, so we only ensure
-      # the directory exists. Otherwise, copy CSS files from app/assets/stylesheets.
-      tailwind_config = @root.join("tailwind.config.js")
+      # Copy CSS files from app/assets/stylesheets to dist/assets/stylesheets
       css_dir = @root.join("app", "assets", "stylesheets")
       dist_css = dist_dir.join("assets", "stylesheets")
       
-      if tailwind_config.exist?
-        # Tailwind handles CSS compilation - just ensure output directory exists
-        FileUtils.mkdir_p(dist_css)
-      elsif css_dir.exist? && css_dir.directory?
-        # No Tailwind - copy CSS files directly
+      if css_dir.exist? && css_dir.directory?
         FileUtils.mkdir_p(dist_css)
         Dir.glob(css_dir.join("*")).each do |item|
           FileUtils.cp_r(item, dist_css, preserve: true)
@@ -371,7 +394,7 @@ module StaticSiteBuilder
           <link rel="stylesheet" href="/assets/stylesheets/application.css">
         </head>
         <body>
-          <%= page_content %>
+          <%= yield %>
           <% if content_for?(:javascript) %>
             <%= yield(:javascript) %>
           <% end %>

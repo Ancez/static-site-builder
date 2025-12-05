@@ -12,7 +12,7 @@ RSpec.describe "Build output validation" do
   describe "HTML output" do
     it "generates valid HTML" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Test</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<!DOCTYPE html><html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<!DOCTYPE html><html><body><%= yield %></body></html>")
 
       builder = StaticSiteBuilder::Builder.new(root: site_root.to_s)
       builder.build
@@ -25,27 +25,14 @@ RSpec.describe "Build output validation" do
       expect(content).to include("<h1>Test</h1>")
     end
 
-    it "includes PageHelpers title in output" do
-      # Create page_helpers.rb with metadata
-      FileUtils.mkdir_p(site_root.join("lib"))
-      page_helpers_content = <<~RUBY
-        module PageHelpers
-          PAGES = {
-            '/page' => {
-              title: 'My Page',
-              description: 'A test page'
-            }
-          }.freeze
-        end
-      RUBY
-      File.write(site_root.join("lib/page_helpers.rb"), page_helpers_content)
-
+    it "includes meta tags title in output" do
       page_content = <<~ERB
+        <% set_meta_tags title: 'My Page', description: 'A test page' %>
         <h1>Content</h1>
       ERB
 
       create_test_page(site_root.to_s, "page.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><title><%= @title || 'Site' %></title></head><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><%= display_meta_tags site: 'Site', title: 'Site' %></head><body><%= yield %></body></html>")
 
       builder = StaticSiteBuilder::Builder.new(root: site_root.to_s)
       builder.build

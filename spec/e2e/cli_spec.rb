@@ -13,9 +13,6 @@ RSpec.describe "CLI" do
       # For now, we test the generator directly
       generator = StaticSiteBuilder::Generator.new(
         site_path.to_s,
-        template_engine: "erb",
-        ,
-        
         
       )
 

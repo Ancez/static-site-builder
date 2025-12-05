@@ -3,53 +3,14 @@
 
 begin
   if ARGV[0] == "new" && ARGV[1]
-    # Remove "new" from ARGV so bin/generate gets just the app name
     app_name = ARGV[1]
-    ARGV.clear
-    ARGV << app_name
 
-    # Load the generator directly instead of loading bin/generate
     require "static_site_builder"
-    require "tty-prompt"
 
-    prompt = TTY::Prompt.new
-
-    template_engine = prompt.select(
-      "Template engine?",
-      StaticSiteBuilder::Generator::TEMPLATE_ENGINES.map(&:capitalize),
-      default: 1
-    ).downcase
-
-    js_bundler = prompt.select(
-      "JavaScript bundler?",
-      StaticSiteBuilder::Generator::JS_BUNDLERS.map(&:capitalize),
-      default: 1
-    ).downcase
-
-    css_framework = prompt.select(
-      "CSS framework?",
-      StaticSiteBuilder::Generator::CSS_FRAMEWORKS.map(&:capitalize),
-      default: 1
-    ).downcase
-
-    js_framework = prompt.select(
-      "JavaScript framework?",
-      StaticSiteBuilder::Generator::JS_FRAMEWORKS.map(&:capitalize),
-      default: 1
-    ).downcase
-
-    options = {
-      template_engine: template_engine,
-      js_bundler: js_bundler,
-      css_framework: css_framework,
-      js_framework: js_framework
-    }
-
-    generator = StaticSiteBuilder::Generator.new(app_name, options)
+    generator = StaticSiteBuilder::Generator.new(app_name)
     generator.generate
   else
     puts "Usage: static-site-builder new <app-name>"
-    puts "   or: ruby bin/generate <app-name>"
     exit 1
   end
 rescue Interrupt

@@ -15,18 +15,12 @@ RSpec.describe StaticSiteBuilder::Builder do
       expect(builder.instance_variable_get(:@root)).to eq(root_path)
     end
 
-    it "sets default template_engine to erb" do
-      builder = described_class.new
-      expect(builder.instance_variable_get(:@template_engine)).to eq("erb")
-    end
-
     it "accepts custom options" do
       builder = described_class.new(
-        root: @tmp_dir.to_s,
-        template_engine: "erb"
+        root: @tmp_dir.to_s
       )
 
-      expect(builder.instance_variable_get(:@template_engine)).to eq("erb")
+      expect(builder.instance_variable_get(:@root)).to eq(@tmp_dir)
     end
 
   end

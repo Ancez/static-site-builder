@@ -143,23 +143,70 @@ Use PostCSS, Sass, or any other CSS tool. Compile your CSS files to `dist/assets
 
 ## Building Powerful Websites
 
-### Using ERB Templates
+### Layouts and Partials
 
-ERB templates use **ActionView** with support for partials and layouts. Use `render partial: 'shared/footer'` syntax.
+ERB files use **ActionView** with support for layouts and partials.
+
+#### Layouts
+
+Create a layout in `app/views/layouts/application.html.erb`:
+
+```erb
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <%= display_meta_tags site: 'Site', title: 'Site' %>
+  <link rel="stylesheet" href="/assets/stylesheets/application.css">
+</head>
+<body>
+  <main>
+    <%= yield %>
+  </main>
+
+  <% if content_for?(:javascript) %>
+    <%= yield(:javascript) %>
+  <% end %>
+</body>
+</html>
+```
+
+The `<%= yield %>` tag yields the content from your page ERB files, just like in Rails.
+
+#### Partials
+
+Use partials for reusable components. Partials are resolved relative to your page template's directory:
+
+```erb
+<%# In app/views/pages/about.html.erb %>
+<h1>About</h1>
+<%= render partial: 'shared/team_member', locals: { name: 'John', role: 'Developer' } %>
+```
+
+This looks for `app/views/pages/shared/_team_member.html.erb` or `app/views/shared/_team_member.html.erb`.
 
 ### SEO / Meta Tags
+
+The layout includes app-wide defaults:
+
+```erb
+<%= display_meta_tags site: 'Site', title: 'Site' %>
+```
 
 To minimize code duplication, define default meta tags in `app/helpers/application_helper.rb`:
 
 ```ruby
-def default_meta_tags
-  {
-    site: 'Site',
-    title: 'Site',
-    description: 'Default description',
-    keywords: 'keyword1, keyword2',
-    separator: '&mdash;'.html_safe
-  }
+module ApplicationHelper
+  def default_meta_tags
+    {
+      site: 'My Awesome Site',
+      title: 'Default Title',
+      description: 'A default description for my awesome site.',
+      keywords: 'static site, ruby, erb, seo',
+      separator: '&mdash;'.html_safe
+    }
+  end
 end
 ```
 

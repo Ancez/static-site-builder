@@ -12,7 +12,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
     it "compiles ERB page" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -31,7 +31,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         <h1>Content</h1>
       ERB
       create_test_page(site_root.to_s, "test.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><%= display_meta_tags %></head><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><head><%= display_meta_tags %></head><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -93,9 +93,9 @@ RSpec.describe StaticSiteBuilder::Builder do
 
     it "annotates template file names when enabled" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, , annotate_template_file_names: true)
+      builder = described_class.new(root: site_root.to_s, annotate_template_file_names: true)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -110,9 +110,9 @@ RSpec.describe StaticSiteBuilder::Builder do
 
     it "does not annotate template file names when disabled" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
-      builder = described_class.new(root: site_root.to_s, , annotate_template_file_names: false)
+      builder = described_class.new(root: site_root.to_s, annotate_template_file_names: false)
       builder.build
 
       output = site_root.join("dist/index.html")
@@ -125,7 +125,7 @@ RSpec.describe StaticSiteBuilder::Builder do
 
     it "auto-enables annotations when LIVE_RELOAD is set" do
       create_test_page(site_root.to_s, "index.html.erb", "<h1>Hello</h1>")
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       ENV["LIVE_RELOAD"] = "true"
       builder = described_class.new(root: site_root.to_s)
@@ -154,7 +154,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -181,7 +181,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -198,7 +198,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       
@@ -219,7 +219,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -245,7 +245,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -267,7 +267,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -288,7 +288,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -312,7 +312,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       create_test_page(site_root.to_s, "index.html.erb", page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build
@@ -345,7 +345,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         <html>
         <body>
           <%= render 'shared/header' %>
-          <%= page_content %>
+          <%= yield %>
           <%= render 'shared/footer' %>
         </body>
         </html>
@@ -384,7 +384,7 @@ RSpec.describe StaticSiteBuilder::Builder do
         </div>
       ERB
       File.write(blog_dir.join("index.html.erb"), page_content)
-      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= page_content %></body></html>")
+      create_test_layout(site_root.to_s, "application.html.erb", "<html><body><%= yield %></body></html>")
 
       builder = described_class.new(root: site_root.to_s)
       builder.build

@@ -5,14 +5,11 @@ require "spec_helper"
 RSpec.describe "Complete workflow" do
   let(:site_root) { @tmp_dir.join("workflow-site") }
 
-  describe "ERB + Esbuild +  + TailwindCSS workflow" do
+  describe "ERB workflow" do
     it "generates and builds successfully" do
       # Generate site
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        template_engine: "erb",
-        ,
-        
         
       )
       generator.generate
@@ -20,12 +17,10 @@ RSpec.describe "Complete workflow" do
       # Verify generation
       expect(site_root.join("Gemfile")).to exist
       expect(site_root.join("app/views/pages/index.html.erb")).to exist
-      expect(site_root.join("esbuild.config.js")).to exist
 
       # Build site
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
-        template_engine: "erb",
         
       )
       builder.build
@@ -42,9 +37,6 @@ RSpec.describe "Complete workflow" do
       # Generate site
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        template_engine: "erb",
-        ,
-        
         
       )
       generator.generate
@@ -57,7 +49,7 @@ RSpec.describe "Complete workflow" do
       # Build site
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
-        template_engine: "erb",
+        
         
       )
       builder.build

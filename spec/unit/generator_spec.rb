@@ -8,17 +8,17 @@ RSpec.describe StaticSiteBuilder::Generator do
       generator = described_class.new("test-app")
 
       expect(generator.instance_variable_get(:@app_name)).to eq("test-app")
-      expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("erb")
+      expect(generator.instance_variable_get(:@options)).to eq({})
     end
 
     it "accepts custom options" do
       options = {
-        template_engine: "erb"
+        
       }
 
       generator = described_class.new("test-app", options)
 
-      expect(generator.instance_variable_get(:@options)[:template_engine]).to eq("erb")
+      expect(generator.instance_variable_get(:@options)).to eq({})
     end
 
     it "creates app_path as Pathname" do
@@ -80,7 +80,7 @@ RSpec.describe StaticSiteBuilder::Generator do
     end
 
     it "creates ERB layout when using erb" do
-      generator = described_class.new(app_path.to_s, template_engine: "erb")
+      generator = described_class.new(app_path.to_s, )
       generator.generate
 
       layout = app_path.join("app/views/layouts/application.html.erb")
@@ -88,11 +88,11 @@ RSpec.describe StaticSiteBuilder::Generator do
 
       content = File.read(layout)
       expect(content).to include("<!DOCTYPE html>")
-      expect(content).to include("<%= page_content %>")
+      expect(content).to include("<%= yield %>")
     end
 
     it "creates example ERB page" do
-      generator = described_class.new(app_path.to_s, template_engine: "erb")
+      generator = described_class.new(app_path.to_s, )
       generator.generate
 
       page = app_path.join("app/views/pages/index.html.erb")

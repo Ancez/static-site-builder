@@ -5,13 +5,10 @@ require "spec_helper"
 RSpec.describe "Full build integration" do
   let(:site_root) { @tmp_dir.join("generated-site") }
 
-  describe "ERB + Esbuild +  + TailwindCSS" do
+  describe "ERB" do
     before do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        template_engine: "erb",
-        ,
-        
         
       )
       generator.generate
@@ -20,8 +17,6 @@ RSpec.describe "Full build integration" do
     it "generates valid project structure" do
       expect(site_root.join("Gemfile")).to exist
       expect(site_root.join("app/views/pages/index.html.erb")).to exist
-      expect(site_root.join("esbuild.config.js")).to exist
-      expect(site_root.join("tailwind.config.js")).to exist
     end
 
     it "builds successfully" do
@@ -51,7 +46,7 @@ RSpec.describe "Full build integration" do
         <!DOCTYPE html>
         <html>
         <head><title><%= @title || 'Site' %></title></head>
-        <body><%= page_content %></body>
+        <body><%= yield %></body>
         </html>
       ERB
 
@@ -67,7 +62,6 @@ RSpec.describe "Full build integration" do
 
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
-        template_engine: "erb",
         
       )
 
@@ -83,11 +77,8 @@ RSpec.describe "Full build integration" do
     before do
       generator = StaticSiteBuilder::Generator.new(
         site_root.to_s,
-        template_engine: "erb",
-        ,
-        
-        
-      )
+          
+        )
       generator.generate
     end
 
@@ -100,7 +91,6 @@ RSpec.describe "Full build integration" do
     it "builds successfully without npm dependencies" do
       builder = StaticSiteBuilder::Builder.new(
         root: site_root.to_s,
-        template_engine: "erb",
         
       )
 

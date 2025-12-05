@@ -27,33 +27,6 @@ RSpec.describe "Generated site structure" do
     end
   end
 
-  describe "package.json validation" do
-    it "generates valid JSON when npm is needed" do
-      generator = StaticSiteBuilder::Generator.new(
-        site_root.to_s,
-        
-      )
-      generator.generate
-
-      package_json = site_root.join("package.json")
-      expect(package_json).to exist
-
-      expect { JSON.parse(File.read(package_json)) }.not_to raise_error
-    end
-
-    it "includes correct scripts" do
-      generator = StaticSiteBuilder::Generator.new(
-        site_root.to_s,
-        ,
-        
-      )
-      generator.generate
-
-      package_json = JSON.parse(File.read(site_root.join("package.json")))
-      expect(package_json["scripts"]).to have_key("build")
-      expect(package_json["scripts"]).to have_key("build:css")
-    end
-  end
 
   describe "Rakefile validation" do
     it "generates valid Rakefile" do
