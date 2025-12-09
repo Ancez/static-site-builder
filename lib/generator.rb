@@ -19,8 +19,6 @@ module StaticSiteBuilder
     # Reference StaticSiteBuilder constants for consistency
     DEFAULT_PORT = StaticSiteBuilder::DEFAULT_PORT
     DEFAULT_WS_PORT = StaticSiteBuilder::DEFAULT_WS_PORT
-    # File watcher poll interval
-    FILE_WATCHER_INTERVAL = 0.5
 
     # Initializes a new generator instance.
     #
@@ -61,40 +59,6 @@ module StaticSiteBuilder
 
     private
 
-
-
-    # Generates Ruby code for the file watcher used in development server.
-    #
-    # The watcher monitors app/ and config/ directories for changes to ERB, Ruby,
-    # and JavaScript files, triggering rebuilds when changes are detected.
-    #
-    # @return [String] Ruby code to be executed by the development server
-    def file_watcher_code
-      <<~RUBY
-        watched = ['app', 'config']
-        exts = ['.erb', '.rb', '.js']
-        mtimes = {}
-        loop do
-          changed = false
-          watched.each do |dir|
-            Dir.glob(File.join(dir, '**', '*')).each do |f|
-              next unless File.file?(f) && exts.any? { |e| f.end_with?(e) }
-              next if f.end_with?('.css')
-              mtime = File.mtime(f)
-              if mtimes[f] != mtime
-                mtimes[f] = mtime
-                changed = true
-              end
-            end
-          end
-          if changed
-            system('rake build:html > /dev/null 2>&1 && rake build:css > /dev/null 2>&1')
-          end
-          sleep #{FILE_WATCHER_INTERVAL}
-        end
-      RUBY
-    end
-
     def create_directory_structure
       dirs = [
         "app/views/layouts",
@@ -119,6 +83,8 @@ module StaticSiteBuilder
         "webrick",  # Required for dev server (removed from stdlib in Ruby 3.0+)
         "sitemap_generator"  # For generating sitemaps from actual pages
       ]
+      
+      # listen gem is included in static-site-builder, no need to add here
 
       content = <<~RUBY
         # frozen_string_literal: true
@@ -159,8 +125,11 @@ module StaticSiteBuilder
             page_name = relative_path.to_s.gsub(/\.html\.erb$/, '')
             
             # Convert page name to URL path
+            # Handle index pages: 'index' -> '/', 'blog/index' -> '/blog/'
             path = if page_name == 'index'
               '/'
+            elsif page_name.end_with?('/index')
+              "/\#{page_name.gsub(/\/index$/, '')}/"
             else
               "/\#{page_name}"
             end
@@ -234,77 +203,7 @@ module StaticSiteBuilder
       create_site_builder
     end
 
-    def webrick_server_code
-      start_websocket_server_code +
-        start_initial_build_code +
-        start_file_watcher_code +
-        start_web_server_code
-    end
-
-    def start_websocket_server_code
-      <<~RUBY
-        require "webrick"
-        require "fileutils"
-        require "static_site_builder/websocket_server"
-        require "json"
-
-        port = ENV["PORT"] || #{DEFAULT_PORT}
-        ws_port = ENV["WS_PORT"] || #{DEFAULT_WS_PORT}
-        dist_dir = Pathname.new(Dir.pwd).join("dist")
-        reload_file = Pathname.new(Dir.pwd).join(".reload")
-
-        # Start WebSocket server for live reload (before first build)
-        ws_server = StaticSiteBuilder::WebSocketServer.new(port: ws_port, reload_file: reload_file)
-        ws_server.start
-      RUBY
-    end
-
-    def start_initial_build_code
-      <<~'RUBY'
-        # Build once before starting (with live reload enabled)
-        ENV["LIVE_RELOAD"] = "true"
-        ENV["WS_PORT"] = ws_port.to_s
-        Rake::Task["build:all"].invoke
-      RUBY
-    end
-
-
-    def start_file_watcher_code
-      <<~'RUBY'
-        puts "\n🚀 Starting development server at http://localhost:#{port}"
-        puts "📡 WebSocket server at ws://localhost:#{ws_port}"
-        puts "📝 Watching for changes... (Ctrl+C to stop)"
-        puts "🔄 Live reload enabled - pages will auto-refresh on changes\n"
-
-        # Simple file watcher - rebuild HTML when files change
-        watcher_code = file_watcher_code
-        watcher_pid = spawn("ruby", "-e", watcher_code, :err => File::NULL)
-      RUBY
-    end
-
-    def start_web_server_code
-      <<~'RUBY'
-        # Start web server
-        server = WEBrick::HTTPServer.new(
-          Port: port,
-          DocumentRoot: dist_dir.to_s,
-          BindAddress: "127.0.0.1"
-        )
-
-        trap("INT") do
-          puts "\n\nShutting down..."
-          Process.kill("TERM", watcher_pid) if watcher_pid
-          ws_server.stop
-          server.shutdown
-        end
-
-        server.start
-      RUBY
-    end
-
     def create_rakefile
-      server_code = webrick_server_code
-
       content = <<~RUBY
         # frozen_string_literal: true
 
@@ -345,7 +244,18 @@ module StaticSiteBuilder
         namespace :dev do
           desc "Start development server with auto-rebuild and live reload"
           task :server do
-            #{server_code}
+            require 'static_site_builder/dev_server'
+            
+            port = ENV['PORT']&.to_i || #{DEFAULT_PORT}
+            ws_port = ENV['WS_PORT']&.to_i || #{DEFAULT_WS_PORT}
+            
+            server = StaticSiteBuilder::DevServer.new(
+              root: Dir.pwd,
+              port: port,
+              ws_port: ws_port
+            )
+            
+            server.start
           end
         end
 

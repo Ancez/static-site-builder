@@ -25,6 +25,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "actionview", "~> 7.1"
   spec.add_dependency "base64", "~> 0.1"  # Required for Ruby 3.4+ (removed from default gems)
+  spec.add_dependency "listen", "~> 3.8"
   spec.add_dependency "meta-tags", "~> 2.0"
   spec.add_dependency "rake", "~> 13.0"
   spec.add_dependency "websocket", "~> 1.2"

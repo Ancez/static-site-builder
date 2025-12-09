@@ -12,4 +12,6 @@ group :development, :test do
   gem "simplecov", "~> 0.22", require: false
 end
 
+gem "listen", "~> 3.8"
 gem "meta-tags", "~> 2.22"
+gem "webrick", "~> 1.8"

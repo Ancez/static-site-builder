@@ -173,8 +173,8 @@ module StaticSiteBuilder
           relative_path = Pathname.new(helper_file).relative_path_from(helpers_dir)
           module_name = relative_path.to_s.gsub(/\.rb$/, '').split('_').map(&:capitalize).join
           
-          # Require the file
-          require helper_file
+          # Load the file (use load instead of require for absolute paths)
+          load helper_file
           
           # Include the module if it exists
           if Object.const_defined?(module_name)
@@ -231,29 +231,38 @@ module StaticSiteBuilder
       page_content
     end
 
-    # Render layout template using ActionView
+    # Render layout template using ActionView with proper yield mechanism
     def render_layout_template(view, layout_content, layout_file, page_content)
       layout = StaticSiteBuilder::DEFAULT_LAYOUT_NAME
       
-      # Replace <%= yield %> with a local variable in the layout content
-      # This allows us to pass page_content as a local while maintaining Rails-like syntax
-      layout_content_with_yield = layout_content.gsub(/<%=?\s*yield\s*%>/, '<%= page_content %>')
+      # Make page content safe for HTML output
+      safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
       
+      # Create layout template
       layout_template = ActionView::Template.new(
-        layout_content_with_yield,
-        'inline:layout',
+        layout_content,
+        layout_file.exist? ? layout_file.to_s : 'inline:layout',
         ActionView::Template::Handlers::ERB.new,
         virtual_path: "layouts/#{layout}",
         format: :html,
-        locals: [:page_content]
+        locals: []
       )
-
-      safe_page_content = page_content.respond_to?(:html_safe) ? page_content.html_safe : page_content
       
-      # Render layout with page_content as local
-      rendered = view.render(template: layout_template, locals: {
-        page_content: safe_page_content
-      })
+      # Render layout with page content available via yield
+      # In Rails/ActionView, yield in a layout template returns the rendered page content
+      # We achieve this by storing the page content in the view flow before rendering the layout
+      # The view flow's :layout key is what yield accesses
+      original_flow_content = view.view_flow.get(:layout)
+      view.view_flow.set(:layout, safe_page_content)
+      
+      rendered = view.render(template: layout_template)
+      
+      # Restore original flow content if it existed
+      if original_flow_content
+        view.view_flow.set(:layout, original_flow_content)
+      else
+        view.view_flow.set(:layout, nil)
+      end
 
       if @annotate_template_file_names && layout_file.exist?
         relative_layout_path = Pathname.new(layout_file).relative_path_from(@root)
@@ -345,9 +354,12 @@ module StaticSiteBuilder
       layout_content, layout_file = load_layout_content
       view = setup_action_view_context
       
+      # Render page template first - this sets up meta tags and content_for blocks
       # Pass erb_file directly - render_page_template will use file-based rendering
-      # Page templates set their own @title, @description, @js_modules etc.
+      # Page templates set their own @title, @description etc. using meta-tags gem
       page_content = render_page_template(view, nil, page_name, erb_file)
+      
+      # Now render layout with page content available via yield
       rendered = render_layout_template(view, layout_content, layout_file, page_content)
       
       write_page_output(dist_dir, page_name, rendered)
