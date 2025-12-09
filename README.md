@@ -224,10 +224,6 @@ You can customize priority, changefreq, and lastmod in `config/sitemap.rb`. The 
 static-site-builder new my-site
 ```
 
-## Upgrading
-
-If you have an existing site from an older version, see [UPGRADE.md](UPGRADE.md) for migration instructions.
-
 ## Notable Projects
 
 Sites built with Static Site Builder:
