@@ -15,7 +15,7 @@
 3. **Build settings**:
    - **Build command**: `rake build:all`
    - **Deploy command**: `npx wrangler deploy --assets=./dist`
-   - **Version command**: `npx wrangler versions upload`
+   - **Version command**: `npx wrangler versions upload --assets=./dist`
    - **Root directory**: `/`
 
 4. **Deploy**: Cloudflare Pages will automatically build and deploy on every push to your main branch

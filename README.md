@@ -1,6 +1,6 @@
 # Static Site Builder
 
-> **⚠️ Active Development**: This project is currently in active development. APIs may change between versions.
+> **⚠️ Active Development**: This project is currently in active development.
 
 A Ruby-based generator and builder for creating static HTML sites with working JavaScript. **No backend required** - just compile your ERB files to static HTML and deploy anywhere.
 
