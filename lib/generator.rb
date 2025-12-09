@@ -99,6 +99,7 @@ module StaticSiteBuilder
       dirs = [
         "app/views/layouts",
         "app/views/pages",
+        "app/views/shared",  # For reusable partials/components
         "app/helpers",
         "app/javascript",
         "app/assets/stylesheets",
@@ -117,7 +118,8 @@ module StaticSiteBuilder
         "rake",
         "static-site-builder",
         "webrick",  # Required for dev server (removed from stdlib in Ruby 3.0+)
-        "sitemap_generator"  # For generating sitemaps from actual pages
+        "sitemap_generator",  # For generating sitemaps from actual pages
+        "meta-tags"  # For SEO meta tags generation
       ]
 
       content = <<~RUBY
@@ -159,9 +161,14 @@ module StaticSiteBuilder
             page_name = relative_path.to_s.gsub(/\.html\.erb$/, '')
             
             # Convert page name to URL path
+            # Handle nested pages: blog/index -> /blog/, about -> /about
             path = if page_name == 'index'
               '/'
+            elsif page_name.end_with?('/index')
+              # Nested index page: blog/index -> /blog/
+              "/\#{page_name.gsub(/\/index$/, '')}/"
             else
+              # Regular page: about -> /about, blog/post -> /blog/post
               "/\#{page_name}"
             end
             
@@ -306,6 +313,7 @@ module StaticSiteBuilder
       server_code = webrick_server_code
 
       content = <<~RUBY
+        # -*- coding: utf-8 -*-
         # frozen_string_literal: true
 
         require_relative "lib/site_builder"
@@ -358,8 +366,12 @@ module StaticSiteBuilder
 
 
     def create_site_builder
-      # Generated sites use the static-site-builder gem
-      # This file configures the builder
+      # Generated sites use the static-site-builder gem at BUILD TIME
+      # The gem is only needed during compilation, not at runtime.
+      # Generated HTML files are completely standalone with no dependencies.
+      # This approach keeps the generated code clean and maintainable.
+      # To make it fully standalone would require copying ~400+ lines of builder code,
+      # which would create significant code duplication and maintenance burden.
       content = <<~RUBY
         # frozen_string_literal: true
 
@@ -383,6 +395,9 @@ module StaticSiteBuilder
 
     def create_erb_example
       content = <<~ERB
+        <%# Set SEO meta tags for this page %>
+        <% set_meta_tags title: 'Welcome', description: 'This is your generated static site built with ERB templates.' %>
+
         <% content_for :javascript do %>
           <script src="/assets/javascripts/application.js"></script>
         <% end %>
