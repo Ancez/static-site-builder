@@ -85,7 +85,7 @@ module StaticSiteBuilder
         next if modified.empty? && added.empty? && removed.empty?
 
         files_changed = (modified + added + removed).select do |file|
-          file.end_with?('.erb', '.rb', '.js') && !file.end_with?('.css')
+          file.end_with?('.erb', '.rb', '.js')
         end
 
         if files_changed.any?

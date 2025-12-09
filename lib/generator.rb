@@ -129,7 +129,7 @@ module StaticSiteBuilder
             path = if page_name == 'index'
               '/'
             elsif page_name.end_with?('/index')
-              "/\#{page_name.gsub(/\/index$/, '')}/"
+              "/\#{page_name[0..-7]}/"
             else
               "/\#{page_name}"
             end
