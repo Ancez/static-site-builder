@@ -22,3 +22,4 @@ bundle exec rake build:all
 - **Build order**: Install dependencies → Build assets → Build HTML
 - **Ruby/Node versions**: Specify versions in your CI/CD configuration to ensure consistent builds
 
+

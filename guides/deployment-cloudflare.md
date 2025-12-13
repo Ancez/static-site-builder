@@ -13,7 +13,7 @@
 2. **Connect your repository** to Cloudflare Pages in the Cloudflare dashboard
 
 3. **Build settings**:
-   - **Build command**: `rake build:all`
+   - **Build command**: `bundle exec rake build:all`
    - **Deploy command**: `npx wrangler deploy --assets=./dist`
    - **Version command**: `npx wrangler versions upload --assets=./dist`
    - **Root directory**: `/`
@@ -22,6 +22,6 @@
 
 ## Notes
 
-- Ensure your `Gemfile` and `package.json` are properly configured
-- The build process will install dependencies automatically
+- `bundle exec rake build:all` cleans `dist/` and rebuilds everything into `dist/`
+- If you use npm tooling (Tailwind, bundlers), add the relevant `package.json` scripts and they will be picked up by the generated `Rakefile`
 

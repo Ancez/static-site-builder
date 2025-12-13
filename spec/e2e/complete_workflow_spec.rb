@@ -8,21 +8,21 @@ RSpec.describe "Complete workflow" do
   describe "ERB workflow" do
     it "generates and builds successfully" do
       # Generate site
-      generator = StaticSiteBuilder::Generator.new(
-        site_root.to_s,
-        
-      )
+      generator = StaticSiteBuilder::Generator.new(site_root.to_s)
       generator.generate
 
       # Verify generation
       expect(site_root.join("Gemfile")).to exist
-      expect(site_root.join("app/views/pages/index.html.erb")).to exist
+      expect(site_root.join("app/views/index.html.erb")).to exist
 
       # Build site
-      builder = StaticSiteBuilder::Builder.new(
-        root: site_root.to_s,
-        
-      )
+      if Object.const_defined?(:SiteBuilder)
+        Object.send(:remove_const, :SiteBuilder)
+      end
+
+      load site_root.join("lib/site_builder.rb")
+
+      builder = SiteBuilder::Builder.new(root: site_root.to_s)
       builder.build
 
       # Verify build output
@@ -35,23 +35,22 @@ RSpec.describe "Complete workflow" do
   describe "ERB + None + Vanilla + Plain CSS workflow" do
     it "generates and builds successfully" do
       # Generate site
-      generator = StaticSiteBuilder::Generator.new(
-        site_root.to_s,
-        
-      )
+      generator = StaticSiteBuilder::Generator.new(site_root.to_s)
       generator.generate
 
       # Verify generation
       expect(site_root.join("Gemfile")).to exist
-      expect(site_root.join("app/views/pages/index.html.erb")).to exist
+      expect(site_root.join("app/views/index.html.erb")).to exist
       expect(site_root.join("package.json")).not_to exist
 
       # Build site
-      builder = StaticSiteBuilder::Builder.new(
-        root: site_root.to_s,
-        
-        
-      )
+      if Object.const_defined?(:SiteBuilder)
+        Object.send(:remove_const, :SiteBuilder)
+      end
+
+      load site_root.join("lib/site_builder.rb")
+
+      builder = SiteBuilder::Builder.new(root: site_root.to_s)
       builder.build
 
       # Verify build output
@@ -67,11 +66,17 @@ RSpec.describe "Complete workflow" do
       generator.generate
 
       # Add additional pages
-      pages_dir = site_root.join("app/views/pages")
-      File.write(pages_dir.join("about.html.erb"), "<h1>About</h1>")
-      File.write(pages_dir.join("contact.html.erb"), "<h1>Contact</h1>")
+      views_dir = site_root.join("app/views")
+      File.write(views_dir.join("about.html.erb"), "<h1>About</h1>")
+      File.write(views_dir.join("contact.html.erb"), "<h1>Contact</h1>")
 
-      builder = StaticSiteBuilder::Builder.new(root: site_root.to_s)
+      if Object.const_defined?(:SiteBuilder)
+        Object.send(:remove_const, :SiteBuilder)
+      end
+
+      load site_root.join("lib/site_builder.rb")
+
+      builder = SiteBuilder::Builder.new(root: site_root.to_s)
       builder.build
 
       expect(site_root.join("dist/index.html")).to exist

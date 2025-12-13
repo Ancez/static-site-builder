@@ -22,8 +22,10 @@ RSpec.describe "Generated site structure" do
       generator.generate
 
       gemfile_content = File.read(site_root.join("Gemfile"))
-      expect(gemfile_content).to include("static-site-builder")
       expect(gemfile_content).to include("rake")
+      expect(gemfile_content).to include("base64")
+      expect(gemfile_content).to include("webrick")
+      expect(gemfile_content).to include("sitemap_generator")
     end
   end
 
@@ -65,13 +67,13 @@ RSpec.describe "Generated site structure" do
       expect { eval(File.read(site_builder)) }.not_to raise_error(SyntaxError)
     end
 
-    it "requires static-site-builder gem" do
+    it "includes local build code" do
       generator = StaticSiteBuilder::Generator.new(site_root.to_s)
       generator.generate
 
       site_builder_content = File.read(site_root.join("lib/site_builder.rb"))
-      expect(site_builder_content).to include("static_site_builder")
-      expect(site_builder_content).to include("StaticSiteBuilder::Builder")
+      expect(site_builder_content).to include("module SiteBuilder")
+      expect(site_builder_content).to include("class Builder")
     end
   end
 end

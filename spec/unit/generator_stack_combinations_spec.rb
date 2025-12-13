@@ -20,7 +20,7 @@ RSpec.describe StaticSiteBuilder::Generator do
 
         # Verify template-specific files
         expect(app_path.join("app/views/layouts/application.html.erb")).to exist
-        expect(app_path.join("app/views/pages/index.html.erb")).to exist
+        expect(app_path.join("app/views/index.html.erb")).to exist
       end
 
       it "generates valid Gemfile" do
@@ -30,8 +30,10 @@ RSpec.describe StaticSiteBuilder::Generator do
         gemfile = app_path.join("Gemfile")
         content = File.read(gemfile)
 
-        expect(content).to include("static-site-builder")
         expect(content).to include("rake")
+        expect(content).to include("base64")
+        expect(content).to include("webrick")
+        expect(content).to include("sitemap_generator")
       end
     end
   end

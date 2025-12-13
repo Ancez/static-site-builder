@@ -55,8 +55,10 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(gemfile).to exist
 
       content = File.read(gemfile)
-      expect(content).to include("static-site-builder")
       expect(content).to include("rake")
+      expect(content).to include("base64")
+      expect(content).to include("webrick")
+      expect(content).to include("sitemap_generator")
     end
 
     it "does not create package.json" do
@@ -80,7 +82,7 @@ RSpec.describe StaticSiteBuilder::Generator do
     end
 
     it "creates ERB layout when using erb" do
-      generator = described_class.new(app_path.to_s, )
+      generator = described_class.new(app_path.to_s)
       generator.generate
 
       layout = app_path.join("app/views/layouts/application.html.erb")
@@ -92,10 +94,10 @@ RSpec.describe StaticSiteBuilder::Generator do
     end
 
     it "creates example ERB page" do
-      generator = described_class.new(app_path.to_s, )
+      generator = described_class.new(app_path.to_s)
       generator.generate
 
-      page = app_path.join("app/views/pages/index.html.erb")
+      page = app_path.join("app/views/index.html.erb")
       expect(page).to exist
 
       content = File.read(page)
@@ -136,7 +138,9 @@ RSpec.describe StaticSiteBuilder::Generator do
       expect(site_builder).to exist
 
       content = File.read(site_builder)
-      expect(content).to include("StaticSiteBuilder::Builder")
+      expect(content).to include("module SiteBuilder")
+      expect(content).to include("class Builder")
+      expect(content).to include("class WebSocketServer")
     end
 
     it "creates README.md" do

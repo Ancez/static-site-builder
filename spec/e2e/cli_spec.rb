@@ -11,10 +11,7 @@ RSpec.describe "CLI" do
     it "generates site when given app name" do
       # This would require mocking STDIN for interactive prompts
       # For now, we test the generator directly
-      generator = StaticSiteBuilder::Generator.new(
-        site_path.to_s,
-        
-      )
+      generator = StaticSiteBuilder::Generator.new(site_path.to_s)
 
       expect { generator.generate }.not_to raise_error
       expect(site_path.join("Gemfile")).to exist

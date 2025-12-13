@@ -8,9 +8,7 @@ A Ruby-based generator and builder for creating static HTML sites with working J
 
 ## Why This Exists
 
-Uses **ActionView** to render ERB files - get Rails-like layouts, pages, and partials compiled to static HTML. Uses standard Ruby gems and familiar patterns.
-
-**Note**: This gem generates standalone static sites. While it uses ActionView (like Rails), it's designed for static site generation without a full Rails application, allowing you to host it for free directly on Cloudflare CDNs and other static hosting services.
+Generates standalone static sites from ERB templates, with a working dev server, file watching, and live reload. Generated projects are **self-contained**: the build code lives in the generated repo (`lib/site_builder.rb`).
 
 ## Why Choose This Over Other Approaches
 
@@ -53,8 +51,8 @@ ruby bin/generate my-site
 ```
 
 Generated sites use:
-- `static-site-builder` gem for compilation
-- ERB files for HTML generation
+- ERB templates for HTML generation
+- local build code in `lib/site_builder.rb` (no runtime dependency on this gem)
 
 ## What Gets Generated
 
@@ -62,15 +60,14 @@ A clean project structure that depends on gems:
 
 ```
 my-site/
-├── Gemfile              # Dependencies (static-site-builder, sitemap_generator, etc.)
-├── Rakefile            # Build tasks (includes sitemap generation)
+├── Gemfile              # Dependencies (rake, webrick, sitemap_generator, etc.)
+├── Rakefile            # Build tasks (assets, HTML, CSS, sitemap, dev server)
 ├── config/
 │   └── sitemap.rb      # Sitemap generation config
 ├── app/
 │   ├── views/
 │   │   ├── layouts/
 │   │   ├── pages/
-│   │   └── components/     # Reusable components/partials
 │   ├── javascript/
 │   └── assets/
 │       └── stylesheets/
@@ -80,26 +77,22 @@ my-site/
 
 ## How It Works
 
-1. **Generator** (`static-site-generator`) - Creates the project structure
-2. **Builder Gem** (`static-site-builder`) - Handles ERB compilation
-3. **Build Tools** - Rake tasks that use the builder gem
-4. **Your Tools** - Add Tailwind CSS CLI, ESBuild, or any other tools you need
+1. **Generator** (`static-site-builder new ...`) - Creates the project structure
+2. **Generated build code** (`lib/site_builder.rb`) - Compiles pages/layouts and provides WebSocket live reload
+3. **Build tools** (`Rakefile`) - Defines `build:*` tasks and `dev:server`
+4. **Your tools** - Add Tailwind, bundlers, etc, and wire them via `package.json` scripts
 
 ## Features
 
 - 🎯 **Static HTML output** - No server-side rendering needed
 - 🔧 **Simple & flexible** - ERB files, add your own tools
-- 📦 **Gem-based** - Uses existing Ruby gems, not custom code
+- 📦 **Self-contained generated sites** - No runtime dependency on this gem
 - 🚀 **Fast builds** - Compile once, deploy everywhere
-- 🎨 **Component support** - ERB components and partials
+- 🔄 **Live reload** - Rebuild and refresh on changes in development
 
-## Building Powerful Websites
+## Templates
 
-### Layouts and Partials
-
-ERB files use **ActionView** with support for layouts and partials.
-
-#### Layouts
+Generated sites use **ActionView** for Rails-like templates, helpers, layouts, and partials.
 
 Create a layout in `app/views/layouts/application.html.erb`:
 
@@ -109,7 +102,6 @@ Create a layout in `app/views/layouts/application.html.erb`:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <%= display_meta_tags site: 'Site', title: 'Site' %>
   <link rel="stylesheet" href="/assets/stylesheets/application.css">
 </head>
 <body>
@@ -124,74 +116,27 @@ Create a layout in `app/views/layouts/application.html.erb`:
 </html>
 ```
 
-The `<%= yield %>` tag yields the content from your page ERB files, just like in Rails.
+`yield` outputs the page content. Use `content_for(:javascript)` to push scripts into the layout.
 
-#### Partials
+### Partials
 
-Use partials for reusable components. Partials are resolved relative to your page template's directory:
-
-```erb
-<%# In app/views/pages/about.html.erb %>
-<h1>About</h1>
-<%= render partial: 'shared/team_member', locals: { name: 'John', role: 'Developer' } %>
-```
-
-This looks for `app/views/pages/shared/_team_member.html.erb` or `app/views/shared/_team_member.html.erb`.
-
-### SEO / Meta Tags
-
-The layout includes app-wide defaults:
+Partials work like Rails, including `locals:`:
 
 ```erb
-<%= display_meta_tags site: 'Site', title: 'Site' %>
+<%= render partial: 'shared/header', locals: { title: 'Home' } %>
 ```
-
-To minimize code duplication, define default meta tags in `app/helpers/application_helper.rb`:
-
-```ruby
-module ApplicationHelper
-  def default_meta_tags
-    {
-      site: 'My Awesome Site',
-      title: 'Default Title',
-      description: 'A default description for my awesome site.',
-      keywords: 'static site, ruby, erb, seo',
-      separator: '&mdash;'.html_safe
-    }
-  end
-end
-```
-
-Then in your layout, use:
-
-```erb
-<%= display_meta_tags(default_meta_tags) %>
-```
-
-Override in individual pages:
-
-```erb
-<% set_meta_tags title: 'Page Title', description: 'Page description' %>
-```
-
-You can also set Open Graph and Twitter Card tags:
-
-```erb
-<% set_meta_tags og: { title: 'OG Title', type: 'website', image: 'https://example.com/image.jpg' } %>
-<% set_meta_tags twitter: { card: 'summary', site: '@username' } %>
-```
-
-See the [meta-tags gem documentation](https://github.com/kpumuk/meta-tags) for all available options.
 
 ### Adding JavaScript
 
 Include JavaScript files in your pages:
 
 ```erb
-<% content_for :javascript do %>
+<% content_for(:javascript) do %>
   <script src="/assets/javascripts/application.js"></script>
 <% end %>
 ```
+
+If you add a `package.json` with a `scripts.build`, `rake build:assets` will run `npm run build`. If you do not, it copies `app/javascript/` into `dist/assets/javascripts/`.
 
 Set up your own bundler if needed and output to `dist/assets/javascripts/`. See setup guides:
 - [ESBuild](guides/setup-esbuild.md)
